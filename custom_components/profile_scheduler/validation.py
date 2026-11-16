@@ -131,7 +131,7 @@ async def async_validate_document(
             invalid("Invalid profile")
         _id(profile["id"], profile_ids, "Profile")
         name = _text(profile["name"], "Profile name")
-        if name in names or name == "Automatic":
+        if name in names or name.casefold() == "automatic":
             invalid("Profile names must be unique and cannot be Automatic")
         names.add(name)
         days = profile["weekdays"]

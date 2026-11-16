@@ -22,4 +22,3 @@ files = ["custom_components/profile_scheduler"]
 follow_imports = "silent"
 ignore_missing_imports = true
 check_untyped_defs = true
-

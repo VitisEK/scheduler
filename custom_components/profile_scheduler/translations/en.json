@@ -11,7 +11,7 @@
   },
   "entity": {
     "switch": {"enabled": {"name": "Enabled"}},
-    "select": {"profile": {"name": "Profile", "state": {"Automatic": "Automatic"}}},
+    "select": {"profile": {"name": "Profile", "state": {"automatic": "Automatic"}}},
     "sensor": {
       "active_profile": {"name": "Active profile"},
       "next_change": {"name": "Next change"}

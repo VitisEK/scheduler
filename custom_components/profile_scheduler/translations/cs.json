@@ -11,7 +11,7 @@
   },
   "entity": {
     "switch": {"enabled": {"name": "Zapnuto"}},
-    "select": {"profile": {"name": "Profil", "state": {"Automatic": "Automaticky"}}},
+    "select": {"profile": {"name": "Profil", "state": {"automatic": "Automaticky"}}},
     "sensor": {
       "active_profile": {"name": "Aktivní profil"},
       "next_change": {"name": "Nejbližší změna"}

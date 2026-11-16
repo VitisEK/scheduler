@@ -33,7 +33,7 @@ class SchedulerEntity(Entity):
 
     async def async_check_admin(self) -> None:
         """Allow HA automations and administrators, not untrusted UI callers."""
-        if user_id := self._context.user_id:
+        if self._context is not None and (user_id := self._context.user_id):
             user = await self.hass.auth.async_get_user(user_id)
             if user is None or not user.is_admin:
                 raise Unauthorized

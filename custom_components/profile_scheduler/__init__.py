@@ -13,6 +13,7 @@ from homeassistant.const import (
     Platform,
 )
 from homeassistant.core import Event, HomeAssistant
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
 
 from .const import DOMAIN, PANEL_PATH
@@ -22,6 +23,7 @@ from .websocket import async_register_websocket
 type SchedulerConfigEntry = ConfigEntry[SchedulerRuntime]
 
 PLATFORMS = (Platform.SELECT, Platform.SENSOR, Platform.SWITCH)
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:

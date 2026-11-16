@@ -4,7 +4,7 @@ DOMAIN = "profile_scheduler"
 PLATFORMS = ("switch", "select", "sensor")
 STORAGE_VERSION = 1
 PANEL_PATH = "profile-scheduler"
-AUTOMATIC = "Automatic"
+AUTOMATIC = "automatic"
 SIGNAL_UPDATED = f"{DOMAIN}_updated"
 ACTION_TIMEOUT = 60
 

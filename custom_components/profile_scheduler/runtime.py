@@ -213,6 +213,7 @@ class SchedulerRuntime:
                     and is_block_start(block, due_local)
                 )
             if should_run:
+                assert selected is not None
                 actions = self._compiled[(selected, row["id"], block["id"])]
                 task = self.hass.async_create_background_task(
                     self._execute(actions, generation, row["name"]),
