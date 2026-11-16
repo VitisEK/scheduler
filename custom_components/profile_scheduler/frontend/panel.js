@@ -237,13 +237,16 @@ export class ProfileSchedulerPanel extends HTMLElement {
       actions.selector = { action: { optionsInSidebar: false } };
       actions.label = this._t("actions");
       actions.value = draft.actions;
+      let targetsInitialized = !!existing || draft.actions.length > 0;
       actions.addEventListener("value-changed", (event) => {
         event.stopPropagation();
         draft.actions = clone(Array.isArray(event.detail.value) ? event.detail.value : [event.detail.value]);
-        if (!existing && draft.actions.length === 1 && row.entity_ids.length) {
+        if (!targetsInitialized && draft.actions.length === 1) {
           const action = draft.actions[0];
-          if ((action.action || action.service) && !action.target && !action.data?.entity_id) {
-            action.target = { entity_id: [...row.entity_ids] };
+          if (action.action || action.service) {
+            targetsInitialized = true;
+            const hasTarget = Object.values(action.target || {}).some((value) => Array.isArray(value) ? value.length > 0 : !!value);
+            if (row.entity_ids.length && !hasTarget && !action.data?.entity_id) action.target = { entity_id: [...row.entity_ids] };
           }
         }
         // HA action selectors are controlled elements: feed every edit back,

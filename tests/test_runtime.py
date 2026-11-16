@@ -165,6 +165,56 @@ async def test_automatic_profile_changes_at_midnight(
     assert [call["temperature"] for call in action_calls] == [18]
 
 
+async def test_midnight_profile_boundary_runs_once_but_recovery_does_not(
+    hass: HomeAssistant,
+    runtime: SchedulerRuntime,
+    schedule_document: dict[str, Any],
+    action_calls: list[dict[str, Any]],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """A genuine weekday boundary runs its midnight action, unlike reconciliation."""
+    schedule_document["manual_profile"] = None
+    home = schedule_document["profiles"][0]
+    home["weekdays"] = [0]
+    tuesday = deepcopy(home)
+    tuesday.update(id="tuesday", name="Tuesday", weekdays=[1])
+    tuesday["rows"][0]["blocks"][0]["actions"][0]["data"]["temperature"] = 18
+    tuesday["rows"][1]["blocks"][0].update(start="00:00", end="00:30")
+    schedule_document["profiles"].append(tuesday)
+    once_events: list[Event] = []
+    hass.bus.async_listen("scheduler_test_once", once_events.append)
+    freezer.move_to("2026-11-16T22:59:00+00:00")
+    await runtime.async_save(schedule_document, runtime.revision)
+    await hass.async_block_till_done(wait_background_tasks=True)
+    action_calls.clear()
+
+    await advance(hass, freezer, "2026-11-16T23:00:00+00:00")
+
+    assert runtime.snapshot()["active_profile"] == "tuesday"
+    assert [call["temperature"] for call in action_calls] == [18]
+    assert len(once_events) == 1
+
+    # Even at the exact start instant, explicit profile selection is recovery.
+    await runtime.async_set_profile("home")
+    await hass.async_block_till_done(wait_background_tasks=True)
+    await runtime.async_set_profile("tuesday")
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert len(once_events) == 1
+
+    # Reloading during the active midnight block cannot replay that action.
+    await runtime.async_stop()
+    freezer.move_to("2026-11-16T23:15:00+00:00")
+    restored = SchedulerRuntime(hass, "runtime-test")
+    await restored.async_load()
+    try:
+        await restored.async_start()
+        await hass.async_block_till_done(wait_background_tasks=True)
+        assert restored.snapshot()["active_profile"] == "tuesday"
+        assert len(once_events) == 1
+    finally:
+        await restored.async_stop()
+
+
 async def test_stop_cancels_future_dispatch(
     hass: HomeAssistant,
     runtime: SchedulerRuntime,
@@ -230,13 +280,14 @@ async def test_native_entry_setup_unload_reload(
     """Exercise the entry lifecycle and real platforms, mocking only panel rendering."""
     entry = MockConfigEntry(domain="profile_scheduler", unique_id="profile_scheduler", data={})
     entry.add_to_hass(hass)
-    hass.config.set_time_zone("Europe/Prague")
+    await hass.config.async_update(time_zone="Europe/Prague")
     with patch(
         "homeassistant.components.panel_custom.async_register_panel",
         new_callable=AsyncMock,
     ) as panel:
         assert await hass.config_entries.async_setup(entry.entry_id)
-        await hass.async_start()
+        if not hass.is_running:
+            await hass.async_start()
         await hass.async_block_till_done(wait_background_tasks=True)
         panel.assert_awaited_once()
         first = entry.runtime_data
@@ -431,13 +482,14 @@ async def test_native_switch_can_disable_its_own_running_scheduler(
     """A native action targeting this scheduler must not await its own cancellation."""
     entry = MockConfigEntry(domain="profile_scheduler", unique_id="profile_scheduler", data={})
     entry.add_to_hass(hass)
-    hass.config.set_time_zone("Europe/Prague")
+    await hass.config.async_update(time_zone="Europe/Prague")
     with patch(
         "homeassistant.components.panel_custom.async_register_panel",
         new_callable=AsyncMock,
     ):
         assert await hass.config_entries.async_setup(entry.entry_id)
-        await hass.async_start()
+        if not hass.is_running:
+            await hass.async_start()
         await hass.async_block_till_done(wait_background_tasks=True)
         registry = er.async_get(hass)
         switch_id = next(

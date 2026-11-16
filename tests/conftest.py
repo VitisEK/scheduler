@@ -93,7 +93,7 @@ async def runtime(
     """Use actual HA storage, event loop, Script, and callback helpers."""
     from custom_components.profile_scheduler.runtime import SchedulerRuntime
 
-    hass.config.set_time_zone("Europe/Prague")
+    await hass.config.async_update(time_zone="Europe/Prague")
     scheduler = SchedulerRuntime(hass, "runtime-test")
     await scheduler.async_load()
     await scheduler.async_start()

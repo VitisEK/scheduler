@@ -85,8 +85,10 @@ integrace vozu nebo nabíječky. Zachovává jejich rozsahy a validaci v HA.
   úsekem předchozího profilu. Pokud profil neodpovídá, nové akce se neprovádějí.
 - Po restartu, opětovném zapnutí, uložení plánu, změně profilu nebo časového pásma
   se dopočítají a nastaví pouze právě platné **stavové** úseky.
-- **Jednorázové** úseky se při obnově ani změně profilu nepřehrávají. Spouštějí se
+- **Jednorázové** úseky se při obnově ani ruční změně profilu nepřehrávají. Spouštějí se
   jen na naplánované hranici; výpadek a zpoždění o minutu nebo více se nedohánějí.
+  Přesný začátek úseku při automatickém přepnutí profilu o půlnoci je běžná hranice,
+  takže se akce provede; starší jednorázové úseky nového profilu se nedohánějí.
 - Platí časové pásmo nastavené v HA. Při jarní změně času se neexistující hranice
   posune na první platnou minutu. Úsek celý uvnitř vynechané hodiny se neprovede.
   Při podzimním opakování hodiny se hranice provede pouze při prvním výskytu.

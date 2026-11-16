@@ -191,8 +191,10 @@ class SchedulerRuntime:
             self._active_keys.clear()
             self._notify()
             return
-        if profile_changed:
-            recover = True
+        # An automatic weekday change at a scheduled boundary is a real start,
+        # not a restart/manual reconciliation. Restore its state, while still
+        # allowing one-shots whose start is exactly that boundary.
+        recover_state = recover or profile_changed
         if cancel_running:
             await self._cancel_work()
         generation = self._generation
@@ -203,7 +205,7 @@ class SchedulerRuntime:
         ) < timedelta(minutes=1)
         for row, block, occurrence in active:
             if block["mode"] == "state":
-                should_run = recover or occurrence not in self._active_keys
+                should_run = recover_state or occurrence not in self._active_keys
             else:
                 should_run = (
                     not recover

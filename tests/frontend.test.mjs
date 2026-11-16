@@ -66,7 +66,7 @@ test("create profile → native entity/action selectors → time block → persi
     change(window, dialog.querySelector("ha-form"), { label: "21 °C", start: "06:00", end: "22:00", mode: "state", color: "#1976d2" });
     const actionSelector = dialog.querySelector("ha-selector");
     assert.deepEqual(JSON.parse(JSON.stringify(actionSelector.selector)), { action: { optionsInSidebar: false } });
-    change(window, actionSelector, [{ action: "climate.set_temperature", data: { temperature: 21 } }]);
+    change(window, actionSelector, [{ action: "climate.set_temperature", target: {}, data: { temperature: 21 } }]);
     assert.equal(actionSelector.value[0].target.entity_id[0], "climate.office");
     change(window, actionSelector, [
       { action: "climate.set_temperature", target: { entity_id: ["climate.office"] }, data: { temperature: 21 } },
