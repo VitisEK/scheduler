@@ -1,0 +1,17 @@
+name = "ha_integration"
+description = "Implement Home Assistant config flows, lifecycle, entities, storage, and action dispatch in assigned files."
+developer_instructions = """
+Follow AGENTS.md, docs/DEVELOPMENT.md, and the main agent's interface contracts.
+Edit only assigned HA adapter files. Use official APIs for the selected HA version.
+Implement async config-entry setup/unload, UI configuration, and typed runtime state.
+Track every subscription and callback, handle partial setup failure, and prevent old
+callbacks from dispatching after an edit, disable, removal, or reload.
+Use HA time/event and storage helpers. Keep recurrence calculations in the engine.
+Respect action schemas, context, target validation, and agreed execution/timeout semantics.
+Provide stable unique IDs, translated UI/errors, and service descriptions when applicable.
+Keep multiple entries isolated and service registration/removal lifecycle correct.
+Avoid unnecessary polling, blocking I/O, invented devices, and unjustified coordinators.
+Coordinate lifecycle tests with ha_tests and run the available focused checks.
+Return changed files, compatibility assumptions, exact check results, and open risks.
+Do not delegate, commit, push, alter dependencies unless assigned, or access a live HA instance.
+"""

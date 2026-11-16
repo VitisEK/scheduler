@@ -1,0 +1,20 @@
+{
+  "title": "Plánovač profilů",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Plánovač profilů",
+        "description": "Vytvořte místní plánovač. V postranním panelu Scheduler upravujte profily, řádky a časové úseky. Vykonávání je zpočátku vypnuté."
+      }
+    },
+    "abort": {"already_configured": "Plánovač profilů je již nastavený"}
+  },
+  "entity": {
+    "switch": {"enabled": {"name": "Zapnuto"}},
+    "select": {"profile": {"name": "Profil", "state": {"Automatic": "Automaticky"}}},
+    "sensor": {
+      "active_profile": {"name": "Aktivní profil"},
+      "next_change": {"name": "Nejbližší změna"}
+    }
+  }
+}

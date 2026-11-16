@@ -7,3 +7,23 @@
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# Python development and local Home Assistant runtime
+.venv/
+.venv-ha/
+.python/
+.cache/
+node_modules/
+test-results/
+playwright-report/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+config/

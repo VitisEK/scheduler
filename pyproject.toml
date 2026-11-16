@@ -1,0 +1,25 @@
+[project]
+name = "ha-profile-scheduler"
+version = "0.1.0"
+description = "Profile-based Home Assistant action scheduler"
+requires-python = ">=3.14.2"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "--strict-markers"
+
+[tool.ruff]
+target-version = "py314"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "UP"]
+
+[tool.mypy]
+python_version = "3.14"
+files = ["custom_components/profile_scheduler"]
+follow_imports = "silent"
+ignore_missing_imports = true
+check_untyped_defs = true
+

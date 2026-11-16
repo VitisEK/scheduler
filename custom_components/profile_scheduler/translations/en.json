@@ -1,0 +1,20 @@
+{
+  "title": "Profile Scheduler",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Profile Scheduler",
+        "description": "Create a local scheduler. Open Scheduler in the sidebar to edit profiles, rows and time blocks. Execution is initially disabled."
+      }
+    },
+    "abort": {"already_configured": "Profile Scheduler is already configured"}
+  },
+  "entity": {
+    "switch": {"enabled": {"name": "Enabled"}},
+    "select": {"profile": {"name": "Profile", "state": {"Automatic": "Automatic"}}},
+    "sensor": {
+      "active_profile": {"name": "Active profile"},
+      "next_change": {"name": "Next change"}
+    }
+  }
+}

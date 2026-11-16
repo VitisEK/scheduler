@@ -1,0 +1,5 @@
+# This test plugin is generated against Home Assistant 2026.10.4.
+homeassistant==2026.10.4
+pytest-homeassistant-custom-component==0.13.375
+ruff==0.14.4
+mypy==1.18.2

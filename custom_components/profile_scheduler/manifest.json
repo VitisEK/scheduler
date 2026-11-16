@@ -1,0 +1,13 @@
+{
+  "domain": "profile_scheduler",
+  "name": "Profile Scheduler",
+  "codeowners": ["@VitisEK"],
+  "config_flow": true,
+  "dependencies": ["frontend", "http", "panel_custom", "websocket_api"],
+  "documentation": "https://github.com/VitisEK/scheduler",
+  "integration_type": "service",
+  "iot_class": "local_push",
+  "issue_tracker": "https://github.com/VitisEK/scheduler/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}
