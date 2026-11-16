@@ -123,6 +123,8 @@ ověřená při aktualizacích HA.
 MVP zatím nenabízí přetahování bloků, kalendářní výjimky dovolené podle dat,
 historii vykonání ani export/import v UI. Jednorázové akce lze nastavit na začátek
 libovolného úseku; šířka bloku neznamená opakování akce během jeho trvání.
+Akce plánu nemají reloadovat ani odebírat samotnou integraci; nepřímé řízení jejího
+lifecycle skriptem zatím není podporované.
 
 ## Vývoj
 
