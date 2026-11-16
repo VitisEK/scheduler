@@ -10,8 +10,29 @@ HA akce; negeneruje množství YAML automatizací a scén.
 ## Požadavky a instalace
 
 - Cílová a testovací verze: **Home Assistant 2026.10.4**, Python **3.14.2+**.
-- Jde o rané MVP, ne hotovou HACS distribuci. Starší verze HA nejsou podporované.
+- Jde o rané MVP instalovatelné přes HACS jako vlastní repozitář. Starší verze HA nejsou podporované.
 - Používá doménu `profile_scheduler`, aby nekolidovalo s existujícím projektem `scheduler`.
+
+### Instalace přes HACS
+
+1. V HACS otevřete nabídku **⋮ → Vlastní repozitáře / Custom repositories**.
+2. Zadejte adresu **`https://github.com/VitisEK/scheduler`**.
+3. Zvolte typ **Integrace / Integration** a klikněte na **Přidat**.
+4. Vyhledejte **Profile Scheduler**, otevřete jej a zvolte **Stáhnout / Download**.
+   Pokud je nabídnuta verze, použijte **main**; repozitář zatím nevydává releases.
+5. Restartujte Home Assistant.
+6. V **Nastavení → Zařízení a služby → Přidat integraci** vyhledejte **Profile Scheduler**.
+7. Otevřete **Scheduler** v postranní nabídce.
+
+HACS stáhne celou integraci včetně `frontend/panel.js`. Není potřeba přidávat kartu,
+Lovelace resource ani další frontendový repozitář. Aktualizace instalujte přes HACS
+a potom restartujte HA. HACS zajišťuje stažení souborů; první konfiguraci integrace
+je potřeba dokončit v **Zařízení a služby**. Pokud už máte ruční instalaci této domény,
+neodebírejte kvůli přechodu config entry v HA: její odebrání by smazalo uložené plány.
+
+Postup přidání vychází z [oficiálního návodu HACS pro vlastní repozitáře](https://hacs.dev/docs/faq/custom_repositories/).
+
+### Ruční instalace
 
 1. Stáhněte tento repozitář a zkopírujte celou složku
    `custom_components/profile_scheduler` do `/config/custom_components/profile_scheduler`
@@ -24,7 +45,10 @@ HA akce; negeneruje množství YAML automatizací a scén.
    vraťte se do Scheduleru a použijte **Znovu načíst editory**. Toto může být nutné
    po novém načtení prohlížeče. Nevyžaduje se přidávání Lovelace resources ani YAML konfigurace.
 
-Pokud integrace po zkopírování není v seznamu, ověřte cestu, restart HA a případně
+### První otevření a řešení potíží
+
+Pokud panel požádá o načtení editorů, otevřete běžný přehled HA a vraťte se do Scheduleru.
+Pokud integrace po instalaci není v seznamu, ověřte cestu, restart HA a případně
 obnovte prohlížeč bez mezipaměti. Chyby načtení integrace hledejte v systémových protokolech HA.
 
 ## První plán

@@ -60,7 +60,12 @@ vyřeš nálezy a spusť dostupné kontroly.
 4. **API:** administrátorské websocket příkazy `profile_scheduler/get`, `/save`,
    `/set_profile`, `/set_enabled`; optimistická revize brání přepsání z jiného editoru.
 5. **Správa:** jedna config entry, nativní switch, select a senzory; soukromé plány
-   může měnit administrátor nebo systémová automatizace. Publikace ani HACS nebyly součástí MVP.
+   může měnit administrátor nebo systémová automatizace.
+6. **Distribuce:** HACS vlastní repozitář typu integration, `hacs.json` v kořeni,
+   minimální HA 2026.10.4 a instalace z `main` bez povinného release. Veškeré běhové
+   soubory včetně panelu musí zůstat v `custom_components/profile_scheduler`.
+   Nejde o zařazení do výchozího katalogu HACS. Kontrola `brands` je výslovně vynechána,
+   protože registrace značky v externím katalogu není podmínkou tohoto způsobu instalace.
 
 `scheduler` je obsazen projektem nielsfaber/scheduler-component a `universal_scheduler`
 projektem schblondie/universal_scheduler. Pro `profile_scheduler` nebyla nalezena
@@ -114,7 +119,9 @@ Frontendové testy přes jsdom ověřují průchod vlastním panelem a vazby na 
 selektory, jejich vnitřní vykreslování nahrazují testovacími prvky. Nejde o browser E2E
 test se skutečným HA frontendem.
 
-CI obsahuje Ruff, mypy, pytest, frontendové testy a hassfest. CI samotné nebylo
+CI obsahuje Ruff, mypy, pytest, frontendové testy, hassfest a HACS validaci
+v `.github/workflows/hacs.yml`. HACS workflow vynechává pouze kontrolu `brands`.
+CI samotné nebylo
 ověřené pouhým vytvořením workflow; skutečný výsledek zaznamenejte po spuštění.
 
 ## Zdroje

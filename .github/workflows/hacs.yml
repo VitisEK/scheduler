@@ -1,0 +1,20 @@
+name: HACS
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate custom HACS integration
+        uses: hacs/action@main
+        with:
+          category: integration
+          # Custom repository; registration in the public Brands catalog is
+          # separate from installation and is not part of this distribution.
+          ignore: brands
+          comment: false
