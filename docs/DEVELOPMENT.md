@@ -64,8 +64,9 @@ vyřeš nálezy a spusť dostupné kontroly.
 6. **Distribuce:** HACS vlastní repozitář typu integration, `hacs.json` v kořeni,
    minimální HA 2026.10.4 a instalace z `main` bez povinného release. Veškeré běhové
    soubory včetně panelu musí zůstat v `custom_components/profile_scheduler`.
-   Nejde o zařazení do výchozího katalogu HACS. Kontrola `brands` je výslovně vynechána,
-   protože registrace značky v externím katalogu není podmínkou tohoto způsobu instalace.
+   Nejde o zařazení do výchozího katalogu HACS. Katalogové kontroly `brands` a `license`
+   jsou výslovně vynechané; registrace značky a volba OSI licence jsou samostatné kroky
+   před případným zařazením do výchozího katalogu. Licence projektu nebyla změněna.
 
 `scheduler` je obsazen projektem nielsfaber/scheduler-component a `universal_scheduler`
 projektem schblondie/universal_scheduler. Pro `profile_scheduler` nebyla nalezena
@@ -120,7 +121,7 @@ selektory, jejich vnitřní vykreslování nahrazují testovacími prvky. Nejde 
 test se skutečným HA frontendem.
 
 CI obsahuje Ruff, mypy, pytest, frontendové testy, hassfest a HACS validaci
-v `.github/workflows/hacs.yml`. HACS workflow vynechává pouze kontrolu `brands`.
+v `.github/workflows/hacs.yml`. HACS workflow vynechává katalogové kontroly `brands` a `license`.
 CI samotné nebylo
 ověřené pouhým vytvořením workflow; skutečný výsledek zaznamenejte po spuštění.
 

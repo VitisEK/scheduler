@@ -14,7 +14,8 @@ jobs:
         uses: hacs/action@main
         with:
           category: integration
-          # Custom repository; registration in the public Brands catalog is
-          # separate from installation and is not part of this distribution.
-          ignore: brands
+          # Custom-repository installation only. Public catalog requirements
+          # (Brands registration and an OSI license) are outside this scope.
+          # Do not select a project license merely to satisfy a catalog check.
+          ignore: brands license
           comment: false
