@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from homeassistant.core import Event, HomeAssistant
+from homeassistant.core import Event, HomeAssistant, ServiceCall
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import (
@@ -52,6 +52,88 @@ async def test_save_applies_current_state_and_keeps_raw_actions(
     assert snapshot["active_profile"] == "home"
     assert snapshot["next_change"] is not None
     assert snapshot["last_error"] is None
+
+
+@pytest.mark.parametrize(
+    ("domain", "service", "target", "data", "mode"),
+    [
+        (
+            "light",
+            "turn_on",
+            "light.scheduler_test",
+            {"brightness_pct": 35},
+            "state",
+        ),
+        ("switch", "turn_off", "switch.scheduler_test", {}, "state"),
+        ("number", "set_value", "number.ev_current", {"value": 8}, "state"),
+        ("select", "select_option", "select.ev_mode", {"option": "Solar"}, "state"),
+        ("scene", "turn_on", "scene.scheduler_test", {}, "once"),
+        (
+            "script",
+            "turn_on",
+            "script.test_charge",
+            {"variables": {"limit": 8}},
+            "once",
+        ),
+        ("script", "test_charge", None, {"limit": 8}, "once"),
+    ],
+    ids=[
+        "light-brightness",
+        "switch-off",
+        "ev-current",
+        "ev-mode",
+        "scene-once",
+        "script-turn-on-variables",
+        "script-direct-call",
+    ],
+)
+async def test_native_action_domains_dispatch_targets_and_parameters(
+    hass: HomeAssistant,
+    runtime: SchedulerRuntime,
+    schedule_document: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+    domain: str,
+    service: str,
+    target: str | None,
+    data: dict[str, Any],
+    mode: str,
+) -> None:
+    """The same native Script boundary supports lighting, EV settings and one-shots."""
+    calls: list[ServiceCall] = []
+
+    async def capture(call: ServiceCall) -> None:
+        calls.append(call)
+
+    hass.services.async_register(domain, service, capture)
+    action: dict[str, Any] = {"action": f"{domain}.{service}", "data": data}
+    if target is not None:
+        action["target"] = {"entity_id": target}
+    row = schedule_document["profiles"][0]["rows"][0]
+    row["entity_ids"] = [target] if target is not None else []
+    row["blocks"][0].update(start="13:00", end="14:00", mode=mode, actions=[action])
+    schedule_document["profiles"][0]["rows"] = [row]
+
+    await runtime.async_save(schedule_document, runtime.revision)
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert calls == []
+
+    await advance(hass, freezer, "2026-11-16T12:00:00+00:00")
+
+    assert len(calls) == 1
+    call = calls[0]
+    assert (call.domain, call.service) == (domain, service)
+    for key, value in data.items():
+        assert call.data[key] == value
+    if target is not None:
+        entity_ids = call.data["entity_id"]
+        assert target in ([entity_ids] if isinstance(entity_ids, str) else entity_ids)
+
+    # Restorable device settings are reapplied on enable; scenes and both
+    # forms of script invocation remain one-shots despite still being active.
+    await runtime.async_set_enabled(False)
+    await runtime.async_set_enabled(True)
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert len(calls) == (2 if mode == "state" else 1)
 
 
 async def test_reload_restores_state_without_replaying_once(
@@ -527,10 +609,22 @@ async def test_native_switch_can_disable_its_own_running_scheduler(
         hass.bus.async_listen("scheduler_test_after_disable", later_events.append)
         await scheduler.async_save(schedule_document, scheduler.revision)
         try:
-            await asyncio.wait_for(advance(hass, freezer, "2026-11-16T12:00:00+00:00"), timeout=5)
+            # Advance the frozen monotonic clock before creating the timeout;
+            # otherwise the one-hour jump immediately expires a five-second bound.
+            boundary = datetime(2026, 11, 16, 12, tzinfo=UTC)
+            freezer.move_to(boundary)
+            async_fire_time_changed(hass, boundary)
+            await asyncio.wait_for(
+                hass.async_block_till_done(wait_background_tasks=True), timeout=5
+            )
             assert scheduler.document["enabled"] is False
             assert hass.states.get(switch_id).state == "off"
-            await asyncio.wait_for(advance(hass, freezer, "2026-11-16T13:00:00+00:00"), timeout=5)
+            later_boundary = datetime(2026, 11, 16, 13, tzinfo=UTC)
+            freezer.move_to(later_boundary)
+            async_fire_time_changed(hass, later_boundary)
+            await asyncio.wait_for(
+                hass.async_block_till_done(wait_background_tasks=True), timeout=5
+            )
             assert later_events == []
         finally:
             await asyncio.wait_for(hass.config_entries.async_unload(entry.entry_id), timeout=5)
