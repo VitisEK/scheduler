@@ -1,5 +1,6 @@
 """Profile Scheduler: structured schedules executed by Home Assistant."""
 
+from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +25,13 @@ type SchedulerConfigEntry = ConfigEntry[SchedulerRuntime]
 
 PLATFORMS = (Platform.SELECT, Platform.SENSOR, Platform.SWITCH)
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+PANEL_FILE = Path(__file__).parent / "frontend" / "panel.js"
+
+
+def _panel_url() -> str:
+    """Use a new module URL whenever the installed panel changes."""
+    digest = sha256(PANEL_FILE.read_bytes()).hexdigest()
+    return f"/profile_scheduler_static/panel.js?v={digest}"
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
@@ -49,13 +57,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: SchedulerConfigEntry) ->
     entry.runtime_data = runtime
     hass.data[DOMAIN]["runtime"] = runtime
     try:
+        panel_url = await hass.async_add_executor_job(_panel_url)
         await panel_custom.async_register_panel(
             hass,
             frontend_url_path=PANEL_PATH,
             webcomponent_name="profile-scheduler-panel",
             sidebar_title="Scheduler",
             sidebar_icon="mdi:calendar-clock",
-            module_url="/profile_scheduler_static/panel.js?v=0.1.0",
+            module_url=panel_url,
             require_admin=True,
             config_panel_domain=DOMAIN,
         )

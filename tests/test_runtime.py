@@ -6,6 +6,8 @@ import asyncio
 from collections.abc import Awaitable, Callable
 from copy import deepcopy
 from datetime import UTC, datetime
+from hashlib import sha256
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, patch
 
@@ -295,6 +297,14 @@ async def test_native_entry_setup_unload_reload(
             await hass.async_start()
         await hass.async_block_till_done(wait_background_tasks=True)
         panel.assert_awaited_once()
+        panel_file = (
+            Path(__file__).parents[1] / "custom_components/profile_scheduler/frontend/panel.js"
+        )
+        digest = sha256(panel_file.read_bytes()).hexdigest()
+        assert (
+            panel.await_args.kwargs["module_url"]
+            == f"/profile_scheduler_static/panel.js?v={digest}"
+        )
         first = entry.runtime_data
         await first.async_save(schedule_document, first.revision)
         await hass.async_block_till_done(wait_background_tasks=True)

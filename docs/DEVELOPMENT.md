@@ -85,6 +85,9 @@ Nativní frontendové komponenty se nekopírují. `window.loadCardHelpers()` a b
 načtou `ha-form`/`ha-selector`; action selector načítá skutečný automatizační editor.
 Při studeném přímém otevření panelu může být nutná návštěva přehledu HA. Toto omezení
 je viditelné v UI i návodu; nepoužívají se privátní metody routeru ani hashované importy.
+Adresa vlastního panelu obsahuje otisk obsahu `panel.js`, aby prohlížeč po jeho
+aktualizaci nepoužil starou verzi neslučitelnou s backendem. Soubor se čte mimo
+hlavní smyčku HA při registraci panelu.
 
 Změny schématu úložiště vyžadují migraci a odpovídající testy; samotné zvýšení
 čísla verze bez migrace není přijatelné.
