@@ -24,28 +24,33 @@ def plan(start: str = "08:00", end: str = "10:00") -> dict:
     """Build a minimal structured schedule."""
     return {
         "enabled": True,
-        "manual_profile": None,
-        "profiles": [
+        "topics": [
             {
-                "id": "home",
-                "name": "Home",
-                "weekdays": list(range(7)),
-                "rows": [
+                "id": "topic",
+                "active_profile": "home",
+                "profiles": [
                     {
-                        "id": "heat",
-                        "name": "Heating",
-                        "entity_ids": ["climate.test"],
-                        "blocks": [
-                            {
-                                "id": "morning",
-                                "start": start,
-                                "end": end,
-                                "mode": "state",
-                                "label": "21 °C",
-                                "color": "#ff9800",
-                                "actions": [],
-                            }
-                        ],
+                        "id": "home",
+                        "name": "Home",
+                        "schedule_mode": "daily",
+                        "schedules": {
+                            "all": [
+                                {
+                                    "id": "heat",
+                                    "blocks": [
+                                        {
+                                            "id": "morning",
+                                            "start": start,
+                                            "end": end,
+                                            "mode": "state",
+                                            "label": "21 °C",
+                                            "color": "#ff9800",
+                                            "actions": [],
+                                        }
+                                    ],
+                                }
+                            ]
+                        },
                     }
                 ],
             }
@@ -59,7 +64,7 @@ class EngineTests(unittest.TestCase):
     @staticmethod
     def active(document: dict, now: datetime) -> list:
         """Select a profile and its active intervals."""
-        return engine.active_blocks(engine.select_profile(document, now), now)
+        return engine.active_blocks(engine.select_profile(document["topics"][0], now), now)
 
     def test_start_inclusive_end_exclusive(self) -> None:
         document = plan()
@@ -80,74 +85,35 @@ class EngineTests(unittest.TestCase):
         after = self.active(document, datetime(2026, 11, 17, 0, tzinfo=UTC))
         self.assertNotEqual(before[0][2], after[0][2])
 
-    def test_manual_profile_ignores_weekday_and_automatic_uses_order(self) -> None:
+    def test_selection_is_manual(self) -> None:
         document = plan()
-        document["profiles"][0]["weekdays"] = [0]
-        away = deepcopy(document["profiles"][0])
-        away.update(id="away", name="Away", weekdays=[5, 6])
-        document["profiles"].append(away)
-        monday = datetime(2026, 11, 16, 9, tzinfo=UTC)
-        self.assertEqual(engine.select_profile(document, monday)["id"], "home")
-        document["manual_profile"] = "away"
-        self.assertEqual(engine.select_profile(document, monday)["id"], "away")
-        document["manual_profile"] = None
-        self.assertEqual(engine.select_profile(document, monday)["id"], "home")
-
-    def test_automatic_profile_changes_at_midnight(self) -> None:
-        document = plan("00:00", "24:00")
-        home = document["profiles"][0]
-        home["weekdays"] = [0]
-        away = deepcopy(home)
-        away.update(id="away", weekdays=[1])
-        document["profiles"].append(away)
-        before = datetime(2026, 11, 16, 23, 59, tzinfo=UTC)
-        midnight = engine.next_change(document, before)
-        self.assertEqual(midnight, datetime(2026, 11, 17, tzinfo=UTC))
-        self.assertEqual(engine.select_profile(document, midnight)["id"], "away")
-
-    def test_manual_profile_change_replaces_active_occurrence(self) -> None:
-        document = plan("00:00", "24:00")
-        away = deepcopy(document["profiles"][0])
-        away.update(id="away", weekdays=[])
-        away["rows"][0]["blocks"][0]["label"] = "16 °C"
-        document["profiles"].append(away)
+        topic = document["topics"][0]
+        away = deepcopy(topic["profiles"][0])
+        away.update(id="away", name="Away")
+        topic["profiles"].append(away)
         now = datetime(2026, 11, 16, 9, tzinfo=UTC)
-        before = self.active(document, now)[0]
-        document["manual_profile"] = "away"
-        after = self.active(document, now)[0]
-        self.assertNotEqual(before[2], after[2])
-        self.assertEqual(after[1]["label"], "16 °C")
-
-    def test_new_weekday_profile_overnight_end_is_next_change(self) -> None:
-        document = plan("22:00", "06:00")
-        tuesday_profile = document["profiles"][0]
-        tuesday_profile["weekdays"] = [1]
-        monday_profile = {"id": "monday", "name": "Monday", "weekdays": [0], "rows": []}
-        document["profiles"].insert(0, monday_profile)
-        now = datetime(2026, 11, 17, 0, 1, tzinfo=UTC)
-        self.assertEqual(len(self.active(document, now)), 1)
-        self.assertEqual(engine.next_change(document, now), datetime(2026, 11, 17, 6, tzinfo=UTC))
-        self.assertEqual(self.active(document, datetime(2026, 11, 17, 6, tzinfo=UTC)), [])
-
-    def test_no_matching_weekday(self) -> None:
-        document = plan()
-        document["profiles"][0]["weekdays"] = []
-        now = datetime(2026, 11, 16, 9, tzinfo=UTC)
-        self.assertIsNone(engine.select_profile(document, now))
-        self.assertEqual(engine.next_change(document, now), datetime(2026, 11, 17, tzinfo=UTC))
+        self.assertEqual(engine.select_profile(topic, now)["id"], "home")
+        topic["active_profile"] = "away"
+        self.assertEqual(engine.select_profile(topic, now)["id"], "away")
+        topic["active_profile"] = None
+        self.assertIsNone(engine.select_profile(topic, now))
+        self.assertIsNone(engine.next_change(document, now))
 
     def test_disabled_has_no_profile_or_next_change(self) -> None:
         document = plan()
         document["enabled"] = False
         now = datetime(2026, 11, 16, 9, tzinfo=UTC)
-        self.assertIsNone(engine.select_profile(document, now))
         self.assertIsNone(engine.next_change(document, now))
 
     def test_next_change_is_strictly_future(self) -> None:
         document = plan()
         now = datetime(2026, 11, 16, 8, tzinfo=UTC)
         self.assertEqual(engine.next_change(document, now), datetime(2026, 11, 16, 10, tzinfo=UTC))
-        self.assertTrue(engine.is_block_start(document["profiles"][0]["rows"][0]["blocks"][0], now))
+        self.assertTrue(
+            engine.is_block_start(
+                document["topics"][0]["profiles"][0]["schedules"]["all"][0]["blocks"][0], now
+            )
+        )
 
     def test_spring_gap_shifts_start_to_first_valid_minute(self) -> None:
         zone = ZoneInfo("Europe/Prague")
@@ -159,13 +125,15 @@ class EngineTests(unittest.TestCase):
         self.assertEqual((local_due.hour, local_due.minute), (3, 0))
         self.assertEqual(len(self.active(document, local_due)), 1)
         self.assertTrue(
-            engine.is_block_start(document["profiles"][0]["rows"][0]["blocks"][0], local_due)
+            engine.is_block_start(
+                document["topics"][0]["profiles"][0]["schedules"]["all"][0]["blocks"][0], local_due
+            )
         )
 
     def test_fall_fold_does_not_restart_or_deactivate_running_block(self) -> None:
         zone = ZoneInfo("Europe/Prague")
         document = plan("02:30", "03:30")
-        block = document["profiles"][0]["rows"][0]["blocks"][0]
+        block = document["topics"][0]["profiles"][0]["schedules"]["all"][0]["blocks"][0]
         first = datetime(2026, 10, 25, 2, 30, tzinfo=zone, fold=0)
         second = datetime(2026, 10, 25, 2, 30, tzinfo=zone, fold=1)
         repeated_two = datetime(2026, 10, 25, 2, tzinfo=zone, fold=1)
@@ -213,9 +181,9 @@ class EngineTests(unittest.TestCase):
 
     def test_many_shared_boundaries_are_resolved_once(self) -> None:
         document = plan()
-        profile = document["profiles"][0]
-        template = profile["rows"][0]
-        profile["rows"] = [dict(template, id=f"row-{index}") for index in range(2000)]
+        profile = document["topics"][0]["profiles"][0]
+        template = profile["schedules"]["all"][0]
+        profile["schedules"]["all"] = [dict(template, id=f"row-{index}") for index in range(2000)]
         now = datetime(2026, 11, 16, 9, tzinfo=UTC)
         with patch.object(engine, "_boundary", wraps=engine._boundary) as boundary:
             self.assertEqual(

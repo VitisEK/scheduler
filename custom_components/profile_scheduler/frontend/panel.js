@@ -1,7 +1,7 @@
 /* Native HA controls surround the only custom UI: the daily timeline. */
 const TEXT = {
   cs: {
-    title: "Scheduler", profiles: "Profily", addProfile: "Přidat profil", editProfile: "Upravit profil",
+    topics: "Témata", addTopic: "Přidat téma", editTopic: "Upravit téma", schedule_mode: "Režim plánu", daily: "Každý den", weekly: "Podle dne v týdnu", changeMode: "Změnit režim plánu? Stávající plány budou nahrazeny kopií vybraného dne.", day: "Den plánu", title: "Scheduler", profiles: "Profily", addProfile: "Přidat profil", editProfile: "Upravit profil",
     addRow: "Přidat řádek", editRow: "Upravit řádek", addBlock: "Přidat úsek", editBlock: "Upravit úsek",
     name: "Název", weekdays: "Dny pro automatický výběr", entities: "Výchozí cílové entity",
     start: "Začátek (HH:MM)", end: "Konec (HH:MM nebo 24:00)", label: "Hodnota nebo popisek akce",
@@ -19,12 +19,13 @@ const TEXT = {
     overlap: "Časy musí mít formát HH:MM a úseky jednoho řádku se nesmějí překrývat.",
     chooseAction: "Přidejte alespoň jednu akci v editoru Home Assistantu.", conflict: "Plán se mezitím změnil. Neuložený návrh zůstal zde; zkopírujte jej nebo znovu načtěte aktuální plán.",
     discard: "Zahodit neuložené změny a načíst uložený plán?", blankName: "Vyplňte název nebo popisek.",
+    clearRowTargets: "Řádek s časovými úseky musí mít cílové entity. Nejprve odstraňte jeho úseky ze všech profilů a dnů.",
     group: "Skupina akcí", timeAxis: "Denní časová osa od 00:00 do 24:00, krok 30 minut",
     colors: ["Modrá", "Zelená", "Oranžová", "Fialová", "Červená", "Tyrkysová"],
     days: ["Pondělí", "Úterý", "Středa", "Čtvrtek", "Pátek", "Sobota", "Neděle"],
   },
   en: {
-    title: "Scheduler", profiles: "Profiles", addProfile: "Add profile", editProfile: "Edit profile",
+    topics: "Topics", addTopic: "Add topic", editTopic: "Edit topic", schedule_mode: "Schedule mode", daily: "Every day", weekly: "By weekday", changeMode: "Change schedule mode? Existing plans will be replaced with a copy of the selected day.", day: "Plan day", title: "Scheduler", profiles: "Profiles", addProfile: "Add profile", editProfile: "Edit profile",
     addRow: "Add row", editRow: "Edit row", addBlock: "Add time block", editBlock: "Edit time block",
     name: "Name", weekdays: "Days for automatic selection", entities: "Default target entities",
     start: "Start (HH:MM)", end: "End (HH:MM or 24:00)", label: "Value or action label",
@@ -42,6 +43,7 @@ const TEXT = {
     overlap: "Use HH:MM times; blocks in the same row must not overlap.",
     chooseAction: "Add at least one action in the Home Assistant editor.", conflict: "The schedule changed elsewhere. Your draft is still here; copy it or reload the current schedule.",
     discard: "Discard unsaved changes and reload the saved schedule?", blankName: "Enter a name or label.",
+    clearRowTargets: "A row with time blocks must have target entities. First remove its blocks from every profile and day.",
     group: "Action group", timeAxis: "Daily timeline from 00:00 to 24:00 in 30-minute steps",
     colors: ["Blue", "Green", "Orange", "Purple", "Red", "Teal"],
     days: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
@@ -129,7 +131,7 @@ export class ProfileSchedulerPanel extends HTMLElement {
       this._document = clone(result.document);
       this._status = result;
       this._revision = result.revision;
-      this._selected = this._document.profiles.some((p) => p.id === this._selected) ? this._selected : this._document.profiles[0]?.id;
+      this._syncSelection();
       this._dirty = false;
       this._error = "";
       this._loaded = true;
@@ -144,8 +146,16 @@ export class ProfileSchedulerPanel extends HTMLElement {
       this._document = clone(result.document);
       this._revision = result.revision;
       this._status = result;
+      this._syncSelection();
       this._render();
     } catch (err) { this._error = err.message || String(err); this._render(); }
+  }
+  _syncSelection() {
+    const topics = this._document.topics;
+    this._topic = topics.some((topic) => topic.id === this._topic) ? this._topic : topics[0]?.id;
+    const topic = topics.find((item) => item.id === this._topic);
+    this._selected = topic?.profiles.some((profile) => profile.id === this._selected) ? this._selected : topic?.profiles[0]?.id;
+    this._day ??= "0";
   }
   _changed() { this._dirty = true; this._error = ""; this._render(); }
   async _save() {
@@ -179,11 +189,12 @@ export class ProfileSchedulerPanel extends HTMLElement {
     return form;
   }
 
-  async _editor(kind, profile, row, existing, startMinute = 0) {
+  async _editor(kind, profile, row, existing, startMinute = 0, commitRow = () => {}) {
     if (this._busy || this._dialog) return;
     if (!await this._nativeEditors()) { this._error = this._t("bootstrap"); this._render(); return; }
-    const draft = clone(existing || (kind === "profile" ? { id: newId(), name: "", weekdays: [], rows: [] }
-      : kind === "row" ? { id: newId(), name: "", entity_ids: [], blocks: [] }
+    const draft = clone(existing || (kind === "topic" ? { id: newId(), name: "", entities: [], active_profile: null, profiles: [] }
+      : kind === "profile" ? { id: newId(), name: "", schedule_mode: "daily", schedules: { all: [] } }
+      : kind === "row" ? { id: newId(), name: "", entity_ids: [] }
         : { id: newId(), label: "", start: clock(startMinute), end: clock(Math.min(1440, startMinute + 30)), mode: "state", color: COLORS[0], actions: [] }));
     // A native prompt loads HA's dialog bundle through the public helper when
     // it has not yet been imported in this browser session.
@@ -202,11 +213,15 @@ export class ProfileSchedulerPanel extends HTMLElement {
     const dialogError = el("p", "", "error");
     dialogError.setAttribute("role", "alert");
     let form;
-    if (kind === "profile") {
-      form = this._form([
-        { name: "name", required: true, selector: { text: {} } },
-        { name: "weekdays", selector: { select: { multiple: true, options: this._t("days").map((label, i) => ({ label, value: String(i) })) } } },
-      ], { ...draft, weekdays: draft.weekdays.map(String) }, (value) => { draft.name = value.name; draft.weekdays = (value.weekdays || []).map(Number); });
+    if (kind === "topic" || kind === "profile") {
+      const schema = [{ name: "name", required: true, selector: { text: {} } }];
+      if (kind === "profile") schema.push({ name: "schedule_mode", selector: { select: { options: [
+        { value: "daily", label: this._t("daily") }, { value: "weekly", label: this._t("weekly") },
+      ] } } });
+      form = this._form(schema, { name: draft.name, schedule_mode: draft.schedule_mode }, (value) => {
+        draft.name = value.name;
+        if (kind === "profile" && value.schedule_mode) draft.schedule_mode = value.schedule_mode;
+      });
     } else if (kind === "row") {
       form = this._form([
         { name: "name", required: true, selector: { text: {} } },
@@ -261,15 +276,23 @@ export class ProfileSchedulerPanel extends HTMLElement {
     const close = () => { dialog.open = false; dialog.remove(); this._dialog = undefined; };
     if (existing) footer.append(this._button(this._t("remove"), async () => {
       if (!await this._confirm(this._t("confirm"))) return;
-      if (kind === "profile") {
-        this._document.profiles = this._document.profiles.filter((p) => p.id !== draft.id);
-        if (this._document.manual_profile === draft.id) this._document.manual_profile = null;
-        this._selected = this._document.profiles[0]?.id;
-      } else if (kind === "row") profile.rows = profile.rows.filter((r) => r.id !== draft.id);
-      else row.blocks = row.blocks.filter((b) => b.id !== draft.id);
+      const topic = this._document.topics.find((item) => item.id === this._topic);
+      if (kind === "topic") {
+        this._document.topics = this._document.topics.filter((item) => item.id !== draft.id);
+        this._syncSelection();
+      } else if (kind === "profile") {
+        topic.profiles = topic.profiles.filter((item) => item.id !== draft.id);
+        if (topic.active_profile === draft.id) topic.active_profile = null;
+        this._syncSelection();
+      } else if (kind === "row") {
+        topic.entities = topic.entities.filter((item) => item.id !== draft.id);
+        for (const item of topic.profiles) for (const key of Object.keys(item.schedules)) {
+          item.schedules[key] = item.schedules[key].filter((entry) => entry.id !== draft.id);
+        }
+      } else row.blocks.splice(row.blocks.findIndex((block) => block.id === draft.id), 1);
       close(); this._changed();
     }, true));
-    footer.append(this._button(this._t("cancel"), close, true), this._button(this._t("save"), () => {
+    footer.append(this._button(this._t("cancel"), close, true), this._button(this._t("save"), async () => {
       if (!(draft.name || draft.label || "").trim()) { dialogError.textContent = this._t("blankName"); return; }
       if (kind === "block") {
         if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(draft.start) || !/^(([01]\d|2[0-3]):[0-5]\d|24:00)$/.test(draft.end) || draft.start === draft.end) {
@@ -277,10 +300,41 @@ export class ProfileSchedulerPanel extends HTMLElement {
         }
         if (!draft.actions.length) { dialogError.textContent = this._t("chooseAction"); return; }
       }
-      const items = kind === "profile" ? this._document.profiles : kind === "row" ? profile.rows : row.blocks;
+      const topic = this._document.topics.find((item) => item.id === this._topic);
+      if (kind === "row" && existing) {
+        const rows = topic.profiles.flatMap((item) => Object.values(item.schedules).flat().filter((entry) => entry.id === existing.id));
+        if (existing.entity_ids.length && !draft.entity_ids.length && rows.some((entry) => entry.blocks.length)) {
+          dialogError.textContent = this._t("clearRowTargets"); return;
+        }
+        const previous = existing.entity_ids;
+        const matches = (value) => {
+          const ids = Array.isArray(value) ? value : [value];
+          return previous.length > 0 && ids.length === previous.length &&
+            [...ids].sort().every((id, index) => id === [...previous].sort()[index]);
+        };
+        if (draft.entity_ids.length) for (const entry of rows) for (const block of entry.blocks) for (const action of block.actions) {
+          if (!action.action && !action.service) continue;
+          const target = action.target || {};
+          if (Object.entries(target).some(([key, value]) => key !== "entity_id" && (Array.isArray(value) ? value.length : value))) continue;
+          const fields = [target, action.data].filter((value) => value && Object.hasOwn(value, "entity_id"));
+          if (!fields.length || !fields.every((value) => matches(value.entity_id))) continue;
+          for (const value of fields) value.entity_id = draft.entity_ids.length === 1 && !Array.isArray(value.entity_id) ? draft.entity_ids[0] : [...draft.entity_ids];
+        }
+      }
+      if (kind === "profile" && existing && draft.schedule_mode !== existing.schedule_mode) {
+        if (!await this._confirm(this._t("changeMode"))) return;
+        const source = existing.schedules[existing.schedule_mode === "daily" ? "all" : this._day] || [];
+        draft.schedules = draft.schedule_mode === "daily" ? { all: clone(source) }
+          : Object.fromEntries(Array.from({ length: 7 }, (_, day) => [String(day), clone(source)]));
+      } else if (kind === "profile" && !existing && draft.schedule_mode === "weekly") {
+        draft.schedules = Object.fromEntries(Array.from({ length: 7 }, (_, day) => [String(day), []]));
+      }
+      const items = kind === "topic" ? this._document.topics : kind === "profile" ? topic.profiles : kind === "row" ? topic.entities : row.blocks;
       const index = items.findIndex((item) => item.id === draft.id);
       if (index < 0) items.push(draft); else items[index] = draft;
+      if (kind === "topic") { this._topic = draft.id; if (!existing) this._selected = undefined; }
       if (kind === "profile") this._selected = draft.id;
+      if (kind === "block") commitRow();
       close(); this._changed();
     }));
     dialog.append(body, footer);
@@ -329,7 +383,8 @@ export class ProfileSchedulerPanel extends HTMLElement {
       main.append(notice);
     }
     const status = el("div", undefined, "status");
-    const active = this._document.profiles.find((p) => p.id === this._status.active_profile);
+    const topic = this._document.topics.find((item) => item.id === this._topic);
+    const active = topic?.profiles.find((item) => item.id === topic.active_profile);
     const due = this._status.next_change ? new Date(this._status.next_change).toLocaleString(this.hass.language, { timeZone: this.hass.config.time_zone }) : "—";
     status.append(el("strong", this._t(this._document.enabled ? "enabled" : "disabled")),
       el("span", `${this._t("active")}: ${active?.name || this._t("noProfile")}`), el("span", `${this._t("next")}: ${due}`),
@@ -342,45 +397,75 @@ export class ProfileSchedulerPanel extends HTMLElement {
       await this._load();
     }, true), el("span", this._t(this._dirty ? "unsaved" : "saved")));
     main.append(toolbar);
-    if (this._editors) {
-      main.append(this._form([{ name: "manual", selector: { select: { options: [{ value: "__auto__", label: this._t("automatic") }, ...this._document.profiles.map((p) => ({ value: p.id, label: p.name }))] } } }],
-        { manual: this._document.manual_profile || "__auto__" }, (value) => { void this._mutate({ type: "profile_scheduler/set_profile", profile_id: value.manual === "__auto__" ? null : value.manual }); }));
+    const topicTabs = el("div", undefined, "profiles");
+    for (const item of this._document.topics) {
+      const tab = this._button(item.name, () => { this._topic = item.id; this._selected = item.profiles[0]?.id; this._render(); }, true);
+      tab.setAttribute("aria-pressed", String(item.id === this._topic));
+      if (item.id === this._topic) tab.className = "selected";
+      topicTabs.append(tab);
     }
-    const tabs = el("div", undefined, "profiles");
-    for (const profile of this._document.profiles) {
-      const tab = this._button(profile.name, () => { this._selected = profile.id; this._render(); }, true);
-      tab.setAttribute("aria-pressed", String(this._selected === profile.id));
-      if (this._selected === profile.id) tab.className = "selected";
-      tabs.append(tab);
+    topicTabs.append(this._button(this._t("addTopic"), () => this._editor("topic"), true));
+    main.append(el("h2", this._t("topics")), topicTabs);
+    if (topic) {
+      const topicControls = el("div", undefined, "toolbar");
+      topicControls.append(this._button(this._t("editTopic"), () => this._editor("topic", undefined, undefined, topic), true),
+        this._button(this._t("addRow"), () => this._editor("row"), true));
+      main.append(topicControls);
+      for (const entity of topic.entities) {
+        const item = el("div", undefined, "toolbar");
+        item.append(el("strong", entity.name), el("small", entity.entity_ids.map((id) => this.hass.states[id]?.attributes.friendly_name || id).join(", ") || this._t("group")),
+          this._button(this._t("editRow"), () => this._editor("row", undefined, entity, entity), true));
+        main.append(item);
+      }
+      if (this._editors) main.append(this._form([{ name: "active", label: this._t("active"), selector: { select: { options: [
+        { value: "__none__", label: this._t("noProfile") }, ...topic.profiles.map((item) => ({ value: item.id, label: item.name })),
+      ] } } }], { active: topic.active_profile || "__none__" }, (value) => {
+        void this._mutate({ type: "profile_scheduler/set_profile", topic_id: topic.id, profile_id: value.active === "__none__" ? null : value.active });
+      }));
+      const tabs = el("div", undefined, "profiles");
+      for (const item of topic.profiles) {
+        const tab = this._button(item.name, () => { this._selected = item.id; this._render(); }, true);
+        tab.setAttribute("aria-pressed", String(this._selected === item.id));
+        if (this._selected === item.id) tab.className = "selected";
+        tabs.append(tab);
+      }
+      tabs.append(this._button(this._t("addProfile"), () => this._editor("profile"), true));
+      main.append(el("h2", this._t("profiles")), tabs);
     }
-    tabs.append(this._button(this._t("addProfile"), () => this._editor("profile"), true));
-    main.append(el("h2", this._t("profiles")), tabs);
-    const profile = this._document.profiles.find((p) => p.id === this._selected);
+    const profile = topic?.profiles.find((item) => item.id === this._selected);
     if (profile) {
       const controls = el("div", undefined, "toolbar");
-      controls.append(this._button(this._t("editProfile"), () => this._editor("profile", profile, undefined, profile), true),
-        this._button(this._t("addRow"), () => this._editor("row", profile), true));
+      controls.append(this._button(this._t("editProfile"), () => this._editor("profile", profile, undefined, profile), true));
       main.append(controls);
-      if (!profile.rows.length) main.append(el("p", this._t("noRows")));
+      if (profile.schedule_mode === "weekly" && this._editors) main.append(this._form([
+        { name: "day", label: this._t("day"), selector: { select: { options: this._t("days").map((label, i) => ({ label, value: String(i) })) } } },
+      ], { day: this._day }, (value) => { this._day = value.day; this._render(); }));
+      if (!topic.entities.length) main.append(el("p", this._t("noRows")));
+      const key = profile.schedule_mode === "daily" ? "all" : this._day;
+      const schedule = profile.schedules[key] || [];
       const scroll = el("div", undefined, "scroll");
       const grid = el("div", undefined, "grid");
       const axis = el("div", undefined, "row");
       const ticks = el("div", undefined, "ticks");
       for (let hour = 0; hour <= 24; hour += 3) ticks.append(el("span", `${String(hour).padStart(2, "0")}:00`));
       axis.append(el("div"), ticks); grid.append(axis);
-      for (const row of profile.rows) {
+      for (const entity of topic.entities) {
+        const entry = schedule.find((item) => item.id === entity.id);
+        // A missing row is created only when a block is actually saved.
+        const row = { ...entity, blocks: entry?.blocks || [] };
+        const commitRow = () => { if (!entry && row.blocks.length) { (profile.schedules[key] ||= []).push({ id: entity.id, blocks: row.blocks }); } };
+        const editBlock = async (block, minute) => { await this._editor("block", profile, row, block, minute, commitRow); };
         const line = el("div", undefined, "row");
         const label = el("div", undefined, "row-label");
         label.append(el("strong", row.name), el("small", row.entity_ids.map((id) => this.hass.states[id]?.attributes.friendly_name || id).join(", ") || this._t("group")),
-          this._button(this._t("editRow"), () => this._editor("row", profile, row, row), true),
-          this._button(this._t("addBlock"), () => this._editor("block", profile, row), true));
+          this._button(this._t("addBlock"), () => editBlock(), true));
         const track = el("div", undefined, "track");
         track.setAttribute("aria-label", `${row.name}: ${this._t("timeAxis")}`);
         track.addEventListener("click", (event) => {
           if (event.target !== track) return;
           const rect = track.getBoundingClientRect();
           const minute = Math.max(0, Math.min(1410, Math.floor((event.clientX - rect.left) / rect.width * 48) * 30));
-          void this._editor("block", profile, row, undefined, minute);
+          void editBlock(undefined, minute);
         });
         for (const block of row.blocks) {
           const begin = minutes(block.start), end = minutes(block.end);
@@ -393,7 +478,7 @@ export class ProfileSchedulerPanel extends HTMLElement {
             button.title = `${block.label}: ${block.start}–${block.end} · ${this._t(block.mode)}`;
             button.setAttribute("aria-label", button.title);
             button.append(el("span", block.label), el("span", `${block.start}–${block.end} ${block.mode === "once" ? "▶" : "↻"}`));
-            button.addEventListener("click", (event) => { event.stopPropagation(); void this._editor("block", profile, row, block); });
+            button.addEventListener("click", (event) => { event.stopPropagation(); void editBlock(block); });
             track.append(button);
           }
         }
@@ -401,7 +486,7 @@ export class ProfileSchedulerPanel extends HTMLElement {
         const blockList = el("div", undefined, "block-list");
         for (const block of [...row.blocks].sort((a, b) => minutes(a.start) - minutes(b.start))) {
           blockList.append(this._button(`${block.start}–${block.end} · ${block.label} · ${this._t(block.mode)}`,
-            () => this._editor("block", profile, row, block), true));
+            () => editBlock(block), true));
         }
         timeline.append(track, blockList);
         line.append(label, timeline); grid.append(line);

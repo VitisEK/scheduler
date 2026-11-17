@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
 
 @pytest.fixture
-def schedule_document() -> dict[str, Any]:
+def legacy_schedule_document() -> dict[str, Any]:
     """Return a state block plus a one-shot block in separate rows."""
     return {
         "enabled": True,
@@ -63,6 +63,37 @@ def schedule_document() -> dict[str, Any]:
                             }
                         ],
                     },
+                ],
+            }
+        ],
+    }
+
+
+@pytest.fixture
+def schedule_document(legacy_schedule_document: dict[str, Any]) -> dict[str, Any]:
+    """Return the same sample under the topic-based contract."""
+    old = legacy_schedule_document
+    profile = old["profiles"][0]
+    rows = profile["rows"]
+    return {
+        "enabled": old["enabled"],
+        "topics": [
+            {
+                "id": "topic",
+                "name": "Topic",
+                "active_profile": "home",
+                "entities": [
+                    {key: row[key] for key in ("id", "name", "entity_ids")} for row in rows
+                ],
+                "profiles": [
+                    {
+                        "id": profile["id"],
+                        "name": profile["name"],
+                        "schedule_mode": "daily",
+                        "schedules": {
+                            "all": [{"id": row["id"], "blocks": row["blocks"]} for row in rows]
+                        },
+                    }
                 ],
             }
         ],

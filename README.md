@@ -1,7 +1,7 @@
 # Profile Scheduler pro Home Assistant
 
-První funkční kostra univerzálního scheduleru: profily, zařízení nebo skupiny akcí
-v řádcích a barevné časové úseky v denní ose 00:00–24:00. Hodnoty mají textové
+Scheduler uspořádává entity a profily do témat. Každé téma má vlastní aktivní
+profil a barevné časové úseky v denní ose 00:00–24:00. Hodnoty mají textové
 popisky, takže význam plánu nezávisí na rozlišení barev.
 
 Plány se ukládají jako strukturovaná data. Integrace přímo vykonává standardní
@@ -53,24 +53,21 @@ obnovte prohlížeč bez mezipaměti. Chyby načtení integrace hledejte v syst�
 
 ## První plán
 
-1. Vytvořte profil, například **Doma**, a zvolte dny pro automatický výběr.
-   Připravené prázdné profily jsou Doma, Pracovní týden, Víkend pryč a Dovolená.
-2. Přidejte řádek, pojmenujte jej a přes standardní HA selector vyberte entity,
-   například `climate.obyvak`. Prázdný seznam cílů je vhodný pro skupinu různých akcí.
-3. Klikněte na **Přidat úsek** nebo do prázdné časové osy. Kliknutí zakládá úsek
-   se začátkem zaokrouhleným na 30 minut; přesné časy lze upravit ve formuláři.
-4. Nastavte čas, barvu a srozumitelný popisek, například **21 °C**, **Vypnuto** nebo
-   **Nabíjení 8 A**. Popisek je informační; skutečné parametry nastavte v editoru akcí.
-5. V **Akce Home Assistant** přidejte běžnou HA akci, její cíl a parametry. Používá
-   se stejný editor jako v automatizacích. Cíle řádku pouze předvyplní první novou akci;
-   při změně cílů řádku se již uložené cíle akcí automaticky nepřepisují.
-6. Uložte dialog a potom celý plán tlačítkem **Uložit** nad seznamem profilů.
-7. Vyberte profil ručně nebo ponechte automatický výběr a zapněte plán. Zapnutí
-   ihned aplikuje právě platné stavové úseky. Výchozí nový plán je vypnutý.
+1. Vytvořte téma, například **Topení**, a přidejte do něj řádky s entitami.
+2. Vytvořte profil, například **Doma**, a zvolte stejný plán pro každý den nebo
+   samostatné plány podle dne v týdnu. Profily používají řádky daného tématu.
+3. Vyberte den plánu a na ose přidejte úseky s časy, popiskem, barvou a akcemi
+   Home Assistantu. Cílové entity řádku předvyplní první novou akci; v editoru
+   akcí lze cíle dále upravit. Při změně entit řádku se přepíší přímé cíle,
+   které přesně odpovídají původnímu seznamu entit řádku. Jiné cíle, oblasti
+   a vnořené skripty se nepřepisují; zkontrolujte je v editoru akcí.
+4. Uložte plán a vyberte aktivní profil tématu. Každé téma lze ovládat zvlášť
+   také z automatizace pomocí příslušné entity výběru v HA.
+5. Zapněte plánovač. Při zapnutí se ihned použijí aktuální stavové úseky.
 
-Kliknutím na blok otevřete úpravu i smazání. Řádky a profily lze také upravit nebo
-smazat. Rozpracované změny zůstávají v prohlížeči do uložení celého plánu; zavření
-stránky na ně upozorní. Současné přepsání z jiného editoru je chráněné revizí.
+Profily se automaticky nepřepínají podle dne. Týdenní plán určuje, co dělá
+zvolený profil v jednotlivých dnech. Změna režimu plánu nahradí předchozí plány
+kopií vybraného dne po potvrzení v editoru.
 
 ## Podporované akce
 
@@ -101,18 +98,12 @@ integrace vozu nebo nabíječky. Zachovává jejich rozsahy a validaci v HA.
   v 22:00 vytvořte další úsek se začátkem 22:00 a akcí `light.turn_off`.
 - Úseky jednoho řádku se nesmějí překrývat. Různé řádky jsou nezávislé; nevytvářejte
   v nich protichůdné akce pro stejné zařízení.
-- Automatický výběr použije první profil v seznamu odpovídající dnešnímu dni.
-  Doma a Dovolená mají ve výchozím nastavení prázdné dny a vybírají se ručně.
-  Při ručním výběru pravidla dnů neomezují aktivitu profilu. Zpět přepněte volbou
-  **Automaticky podle dnů**. V MVP pořadí profilů určuje pořadí jejich vytvoření.
-- O půlnoci se znovu vyhodnotí pravidla dnů. Nový profil má přednost i před nočním
-  úsekem předchozího profilu. Pokud profil neodpovídá, nové akce se neprovádějí.
+- Aktivní profil se vybírá pro každé téma nezávisle ručně nebo automatizací.
+- O půlnoci se vyhodnotí plán následujícího dne v rámci aktivního profilu.
 - Po restartu, opětovném zapnutí, uložení plánu, změně profilu nebo časového pásma
   se dopočítají a nastaví pouze právě platné **stavové** úseky.
 - **Jednorázové** úseky se při obnově ani ruční změně profilu nepřehrávají. Spouštějí se
   jen na naplánované hranici; výpadek a zpoždění o minutu nebo více se nedohánějí.
-  Přesný začátek úseku při automatickém přepnutí profilu o půlnoci je běžná hranice,
-  takže se akce provede; starší jednorázové úseky nového profilu se nedohánějí.
 - Platí časové pásmo nastavené v HA. Při jarní změně času se neexistující hranice
   posune na první platnou minutu. Úsek celý uvnitř vynechané hodiny se neprovede.
   Při podzimním opakování hodiny se hranice provede pouze při prvním výskytu.
@@ -125,15 +116,21 @@ integrace vozu nebo nabíječky. Zachovává jejich rozsahy a validaci v HA.
 
 ## Správa a data
 
-Integrace vytvoří standardní HA entity: přepínač zapnutí, výběr profilu a senzory
-aktivního profilu a nejbližšího vyhodnocení. Nejbližší termín může být půlnoc pro
-výběr profilu, i když tehdy nebude potřeba odeslat akci. Panel stav obnovuje nejvýše
+Integrace vytvoří standardní HA entity: přepínač zapnutí, výběr profilu pro
+každé téma a senzor nejbližšího vyhodnocení. Nejbližší termín může být půlnoc,
+i když tehdy nebude potřeba odeslat akci. Panel stav obnovuje nejvýše
 po 30 sekundách, pokud není rozepsaná změna nebo otevřený dialog.
 
 Plán a jeho revize se ukládají přes `homeassistant.helpers.storage.Store` do HA
 `.storage/profile_scheduler.<entry_id>`. Soubory neupravujte ručně; zahrňte je do
 zálohy HA. Samotný reload nebo restart data ponechá, odebrání integrace plány smaže.
 MVP podporuje jednu instanci integrace.
+
+Při převodu staršího úložiště vznikne téma **Migrated** se zachovanými profily,
+řádky a akcemi. Dříve ručně zvolený profil zůstane aktivní. Pokud byl zapnutý
+automatický výběr podle dne, po převodu žádný profil aktivní není a je třeba jej
+zvolit ručně nebo automatizací. Původní automatické přepínání profilů podle dnů
+se již nepoužívá.
 
 ## Rozsah a známá omezení
 

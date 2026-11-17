@@ -53,7 +53,7 @@ vyřeš nálezy a spusť dostupné kontroly.
 ## Architektura MVP a přijatá rozhodnutí
 
 1. **Jádro `engine.py`:** čisté výpočty nad předaným časem, bez HA a bez I/O.
-2. **HA adaptér:** config flow, `ConfigEntry.runtime_data`, Store v1, callback na nejbližší
+2. **HA adaptér:** config flow, `ConfigEntry.runtime_data`, verzovaný Store, callback na nejbližší
    hranici, standardní Script pro vykonání akcí; žádná vygenerovaná YAML automatizace.
 3. **Panel `frontend/panel.js`:** vlastní osa a struktura profilů/řádků, nativní `ha-form`,
    `ha-selector` pro entity a akce, `ha-dialog`, HA motivy. Není potřeba npm build při instalaci.
@@ -73,8 +73,9 @@ projektem schblondie/universal_scheduler. Pro `profile_scheduler` nebyla nalezen
 kolize v HA Core ani veřejném vyhledávání; použita je tato doména.
 
 Časové a provozní chování je podrobně popsané v [README](../README.md): polootevřené
-intervaly včetně nočních, přednost aktuálního profilu při půlnoci, první odpovídající
-profil, ruční override, HA časové pásmo a jeho změny, posun neexistující hranice na
+intervaly včetně nočních, noční úseky pokračující do následujícího dne,
+samostatný ruční výběr profilu pro každé téma, HA časové pásmo a jeho změny,
+posun neexistující hranice na
 první platnou minutu a pouze první výskyt opakované hodiny. Stavové akce se při obnově
 znovu nastavují, jednorázové se nedohánějí. Úplně vynechaný jarní interval se přeskočí.
 Po skončení bloku není implicitní opačná akce. Nové vyhodnocení ruší předchozí sekvence;
@@ -85,8 +86,8 @@ načtou `ha-form`/`ha-selector`; action selector načítá skutečný automatiza
 Při studeném přímém otevření panelu může být nutná návštěva přehledu HA. Toto omezení
 je viditelné v UI i návodu; nepoužívají se privátní metody routeru ani hashované importy.
 
-Store má explicitní verzi 1. Pro budoucí změnu schématu je nutná migrace a odpovídající
-testy; samotné zvýšení čísla verze bez migrace není přijatelné.
+Změny schématu úložiště vyžadují migraci a odpovídající testy; samotné zvýšení
+čísla verze bez migrace není přijatelné.
 
 Významná přijatá rozhodnutí zapisujte stručně s důvodem sem nebo do samostatného ADR
 v `docs/decisions/`. Otevřená produktová rozhodnutí nepřevádějte potichu na implementační výchozí hodnoty.

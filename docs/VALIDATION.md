@@ -35,3 +35,11 @@ vnitřního vykreslování komponent ve skutečném prohlížeči HA.
 Ruční instalace a proklikání celé aplikace ve skutečném HA prohlížeči nebyly provedené.
 Frontendová rozhraní byla navíc porovnána se zdroji frontendové verze `20260930.5`,
 kterou používá cílový HA; návod popisuje možné první načtení editorů přes přehled.
+
+## Témata a samostatné profily
+
+Při vývoji nové verze byly na Linuxu s Pythonem 3.14.10 a HA 2026.10.4 spuštěny
+Python integrační testy, frontendové testy, Ruff a mypy. Testy používají syntetické
+služby a náhražky frontendových komponent; instalace do skutečného HA a ovládání
+reálných zařízení nebyly provedeny. Starý automatický výběr profilu podle dne se
+při migraci vypne a integrace zobrazí upozornění.

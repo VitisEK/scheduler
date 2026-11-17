@@ -1,4 +1,4 @@
-"""Expose the active profile and next boundary as native sensors."""
+"""Expose the next boundary as a native sensor."""
 
 from datetime import datetime
 
@@ -13,33 +13,7 @@ from .entity import SchedulerEntity
 async def async_setup_entry(
     hass: HomeAssistant, entry: SchedulerConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
-    async_add_entities(
-        [
-            ActiveProfileSensor(entry.runtime_data, "active_profile"),
-            NextChangeSensor(entry.runtime_data, "next_change"),
-        ]
-    )
-
-
-class ActiveProfileSensor(SchedulerEntity, SensorEntity):
-    """Report the selected profile name, independent of enablement."""
-
-    _attr_icon = "mdi:calendar-account"
-
-    @property
-    def native_value(self) -> str | None:
-        return next(
-            (
-                profile["name"]
-                for profile in self.runtime.document["profiles"]
-                if profile["id"] == self.runtime.active_profile
-            ),
-            None,
-        )
-
-    @property
-    def extra_state_attributes(self) -> dict:
-        return {"profile_id": self.runtime.active_profile, "last_error": self.runtime.last_error}
+    async_add_entities([NextChangeSensor(entry.runtime_data, "next_change")])
 
 
 class NextChangeSensor(SchedulerEntity, SensorEntity):

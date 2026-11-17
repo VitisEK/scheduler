@@ -42,28 +42,21 @@ def _boundary(day: date, minute: int, zone: tzinfo) -> datetime:
     raise ValueError("Timezone has no valid boundary within two days")
 
 
-def select_profile(document: Document, now: datetime) -> Document | None:
-    """Select the manual override, or the first profile matching this weekday."""
+def select_profile(topic: Document, now: datetime) -> Document | None:
+    """Return the profile explicitly selected for this topic."""
     _aware(now)
-    if not document.get("enabled", True):
-        return None
-    profiles = document.get("profiles", [])
-    manual = document.get("manual_profile")
-    if manual is not None:
-        return next((profile for profile in profiles if profile["id"] == manual), None)
-    return next(
-        (profile for profile in profiles if now.weekday() in profile.get("weekdays", [])),
-        None,
-    )
+    selected = topic.get("active_profile")
+    return next((p for p in topic.get("profiles", []) if p["id"] == selected), None)
+
+
+def schedule_rows(profile: Document, day: date) -> tuple[str, list[Document]]:
+    """Find the schedule anchored on a local calendar day."""
+    key = "all" if profile["schedule_mode"] == "daily" else str(day.weekday())
+    return key, profile["schedules"].get(key, [])
 
 
 def active_blocks(profile: Document | None, now: datetime) -> list[ActiveBlock]:
-    """Return current blocks and stable occurrence identities.
-
-    Weekdays select the profile for the current date. An overnight block belongs
-    to the currently selected profile; switching profiles at midnight supersedes
-    the previous profile, including its overnight work.
-    """
+    """Return active blocks, including overnight blocks anchored yesterday."""
     _aware(now)
     if profile is None:
         return []
@@ -73,8 +66,7 @@ def active_blocks(profile: Document | None, now: datetime) -> list[ActiveBlock]:
     boundaries: dict[tuple[date, int], datetime] = {}
 
     def resolve(day: date, minute: int) -> datetime:
-        """Resolve each shared row boundary only once for this evaluation."""
-        if minute == 24 * 60:
+        if minute == 1440:
             day, minute = day + timedelta(days=1), 0
         key = (day, minute)
         if key not in boundaries:
@@ -82,20 +74,18 @@ def active_blocks(profile: Document | None, now: datetime) -> list[ActiveBlock]:
             boundaries[key] = _boundary(day, minute, now.tzinfo)
         return boundaries[key]
 
-    for row in profile.get("rows", []):
-        for block in row.get("blocks", []):
-            start = _minute(block["start"])
-            end = _minute(block["end"])
-            if start == end:
-                continue
-            for anchor in (now.date() - timedelta(days=1), now.date()):
-                end_day = anchor + timedelta(days=end < start)
+    for anchor in (now.date() - timedelta(days=1), now.date()):
+        day_key, rows = schedule_rows(profile, anchor)
+        for row in rows:
+            for block in row["blocks"]:
+                start, end = _minute(block["start"]), _minute(block["end"])
+                if start == end:
+                    continue
                 begins = resolve(anchor, start)
-                ends = resolve(end_day, end)
+                ends = resolve(anchor + timedelta(days=end < start), end)
                 if begins <= instant < ends:
-                    occurrence = f"{profile['id']}:{row['id']}:{block['id']}:{anchor.isoformat()}"
+                    occurrence = f"{day_key}:{row['id']}:{block['id']}:{anchor.isoformat()}"
                     active.append((row, block, occurrence))
-                    break
     return active
 
 
@@ -111,11 +101,7 @@ def is_block_start(block: Document, now: datetime) -> bool:
 
 
 def next_change(document: Document, now: datetime) -> datetime | None:
-    """Return the next UTC boundary, including midnight profile re-evaluation.
-
-    Scheduling midnight even without a matching profile ensures a future weekday
-    rule becomes effective. The function never returns now or a past instant.
-    """
+    """Return the next boundary across all selected topics."""
     _aware(now)
     if not document.get("enabled", True):
         return None
@@ -123,16 +109,26 @@ def next_change(document: Document, now: datetime) -> datetime | None:
     instant = now.astimezone(UTC)
     today = now.date()
     tomorrow = today + timedelta(days=1)
+    profiles = [
+        profile
+        for topic in document.get("topics", [])
+        if (profile := select_profile(topic, now)) is not None
+    ]
+    if not profiles:
+        return None
     boundaries = {(tomorrow, 0)}
-    # Midnight is always a candidate, so no boundary after it can be the next
-    # change. Current-day rules also govern overnight ends anchored yesterday.
-    # Both today's normal ends and yesterday's overnight ends fall today.
-    current_profile = select_profile(document, now)
-    if current_profile is not None:
-        for row in current_profile.get("rows", []):
-            for block in row.get("blocks", []):
-                for value in (block["start"], block["end"]):
-                    minute = _minute(value)
-                    boundaries.add((tomorrow, 0) if minute == 24 * 60 else (today, minute))
+    for profile in profiles:
+        for anchor in (today - timedelta(days=1), today):
+            _, rows = schedule_rows(profile, anchor)
+            for row in rows:
+                for block in row["blocks"]:
+                    start, end = _minute(block["start"]), _minute(block["end"])
+                    if anchor == today:
+                        boundaries.add((today, start))
+                    end_day = anchor + timedelta(days=end < start)
+                    if end == 1440:
+                        end_day, end = end_day + timedelta(days=1), 0
+                    if end_day >= today:
+                        boundaries.add((end_day, end))
     candidates = {_boundary(day, minute, now.tzinfo) for day, minute in boundaries}
     return min(candidate for candidate in candidates if candidate > instant)

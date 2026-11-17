@@ -49,7 +49,7 @@ async def test_save_applies_current_state_and_keeps_raw_actions(
     assert hass.states.get("climate.scheduler_test").attributes["temperature"] == 21
     snapshot = runtime.snapshot()
     assert snapshot["document"] == schedule_document
-    assert snapshot["active_profile"] == "home"
+    assert snapshot["active_profile"] == {"topic": "home"}
     assert snapshot["next_change"] is not None
     assert snapshot["last_error"] is None
 
@@ -108,10 +108,12 @@ async def test_native_action_domains_dispatch_targets_and_parameters(
     action: dict[str, Any] = {"action": f"{domain}.{service}", "data": data}
     if target is not None:
         action["target"] = {"entity_id": target}
-    row = schedule_document["profiles"][0]["rows"][0]
-    row["entity_ids"] = [target] if target is not None else []
+    row = schedule_document["topics"][0]["profiles"][0]["schedules"]["all"][0]
+    schedule_document["topics"][0]["entities"][0]["entity_ids"] = (
+        [target] if target is not None else []
+    )
     row["blocks"][0].update(start="13:00", end="14:00", mode=mode, actions=[action])
-    schedule_document["profiles"][0]["rows"] = [row]
+    schedule_document["topics"][0]["profiles"][0]["schedules"]["all"] = [row]
 
     await runtime.async_save(schedule_document, runtime.revision)
     await hass.async_block_till_done(wait_background_tasks=True)
@@ -197,104 +199,25 @@ async def test_profile_change_recomputes_state_without_once(
     freezer: FrozenDateTimeFactory,
 ) -> None:
     """Manual selection applies the other profile even during its one-shot block."""
-    away = deepcopy(schedule_document["profiles"][0])
+    away = deepcopy(schedule_document["topics"][0]["profiles"][0])
     away["id"] = "away"
     away["name"] = "Away"
-    away["weekdays"] = []
-    away["rows"][0]["blocks"][0]["actions"][0]["data"]["temperature"] = 17
-    away["rows"][1]["blocks"][0]["start"] = "12:00"
-    away["rows"][1]["blocks"][0]["end"] = "14:00"
-    schedule_document["profiles"].append(away)
+    away["schedules"]["all"][0]["blocks"][0]["actions"][0]["data"]["temperature"] = 17
+    away["schedules"]["all"][1]["blocks"][0]["start"] = "12:00"
+    away["schedules"]["all"][1]["blocks"][0]["end"] = "14:00"
+    schedule_document["topics"][0]["profiles"].append(away)
     once_events: list[Event] = []
     hass.bus.async_listen("scheduler_test_once", once_events.append)
     await runtime.async_save(schedule_document, runtime.revision)
     action_calls.clear()
     freezer.move_to("2026-11-16T11:15:00+00:00")
 
-    await runtime.async_set_profile("away")
+    await runtime.async_set_profile("topic", "away")
     await hass.async_block_till_done(wait_background_tasks=True)
 
-    assert runtime.snapshot()["active_profile"] == "away"
+    assert runtime.snapshot()["active_profile"] == {"topic": "away"}
     assert [call["temperature"] for call in action_calls] == [17]
     assert once_events == []
-
-
-async def test_automatic_profile_changes_at_midnight(
-    hass: HomeAssistant,
-    runtime: SchedulerRuntime,
-    schedule_document: dict[str, Any],
-    action_calls: list[dict[str, Any]],
-    freezer: FrozenDateTimeFactory,
-) -> None:
-    """A midnight callback changes weekday profile and applies its current state."""
-    schedule_document["manual_profile"] = None
-    home = schedule_document["profiles"][0]
-    home["weekdays"] = [0]
-    home["rows"] = home["rows"][:1]
-    away = deepcopy(home)
-    away["id"] = "tuesday"
-    away["name"] = "Tuesday"
-    away["weekdays"] = [1]
-    away["rows"][0]["blocks"][0]["actions"][0]["data"]["temperature"] = 18
-    schedule_document["profiles"].append(away)
-    freezer.move_to("2026-11-16T22:59:00+00:00")
-    await runtime.async_save(schedule_document, runtime.revision)
-    action_calls.clear()
-
-    await advance(hass, freezer, "2026-11-16T23:00:00+00:00")
-
-    assert runtime.snapshot()["active_profile"] == "tuesday"
-    assert [call["temperature"] for call in action_calls] == [18]
-
-
-async def test_midnight_profile_boundary_runs_once_but_recovery_does_not(
-    hass: HomeAssistant,
-    runtime: SchedulerRuntime,
-    schedule_document: dict[str, Any],
-    action_calls: list[dict[str, Any]],
-    freezer: FrozenDateTimeFactory,
-) -> None:
-    """A genuine weekday boundary runs its midnight action, unlike reconciliation."""
-    schedule_document["manual_profile"] = None
-    home = schedule_document["profiles"][0]
-    home["weekdays"] = [0]
-    tuesday = deepcopy(home)
-    tuesday.update(id="tuesday", name="Tuesday", weekdays=[1])
-    tuesday["rows"][0]["blocks"][0]["actions"][0]["data"]["temperature"] = 18
-    tuesday["rows"][1]["blocks"][0].update(start="00:00", end="00:30")
-    schedule_document["profiles"].append(tuesday)
-    once_events: list[Event] = []
-    hass.bus.async_listen("scheduler_test_once", once_events.append)
-    freezer.move_to("2026-11-16T22:59:00+00:00")
-    await runtime.async_save(schedule_document, runtime.revision)
-    await hass.async_block_till_done(wait_background_tasks=True)
-    action_calls.clear()
-
-    await advance(hass, freezer, "2026-11-16T23:00:00+00:00")
-
-    assert runtime.snapshot()["active_profile"] == "tuesday"
-    assert [call["temperature"] for call in action_calls] == [18]
-    assert len(once_events) == 1
-
-    # Even at the exact start instant, explicit profile selection is recovery.
-    await runtime.async_set_profile("home")
-    await hass.async_block_till_done(wait_background_tasks=True)
-    await runtime.async_set_profile("tuesday")
-    await hass.async_block_till_done(wait_background_tasks=True)
-    assert len(once_events) == 1
-
-    # Reloading during the active midnight block cannot replay that action.
-    await runtime.async_stop()
-    freezer.move_to("2026-11-16T23:15:00+00:00")
-    restored = SchedulerRuntime(hass, "runtime-test")
-    await restored.async_load()
-    try:
-        await restored.async_start()
-        await hass.async_block_till_done(wait_background_tasks=True)
-        assert restored.snapshot()["active_profile"] == "tuesday"
-        assert len(once_events) == 1
-    finally:
-        await restored.async_stop()
 
 
 async def test_stop_cancels_future_dispatch(
@@ -322,11 +245,11 @@ async def test_invalid_revision_or_profile_cannot_mutate_plan(
     original = deepcopy(runtime.document)
     revision = runtime.revision
     changed = deepcopy(original)
-    changed["profiles"][0]["name"] = "Stale editor"
+    changed["topics"][0]["profiles"][0]["name"] = "Stale editor"
     with pytest.raises(HomeAssistantError):
         await runtime.async_save(changed, revision - 1)
     with pytest.raises(HomeAssistantError):
-        await runtime.async_set_profile("missing")
+        await runtime.async_set_profile("topic", "missing")
     assert runtime.document == original
     assert runtime.revision == revision
 
@@ -336,7 +259,7 @@ async def test_document_validation_rejects_invalid_actions_and_overlap(
     hass: HomeAssistant, schedule_document: dict[str, Any], invalid_kind: str
 ) -> None:
     """Invalid schedules are rejected before persistence or device execution."""
-    row = schedule_document["profiles"][0]["rows"][0]
+    row = schedule_document["topics"][0]["profiles"][0]["schedules"]["all"][0]
     block = row["blocks"][0]
     if invalid_kind == "overlap":
         overlap = deepcopy(block)
@@ -378,7 +301,7 @@ async def test_native_entry_setup_unload_reload(
         revision = first.revision
         assert hass.states.async_entity_ids("switch")
         assert hass.states.async_entity_ids("select")
-        assert len(hass.states.async_entity_ids("sensor")) >= 2
+        assert len(hass.states.async_entity_ids("sensor")) >= 1
 
         assert await hass.config_entries.async_unload(entry.entry_id)
         action_calls.clear()
@@ -412,7 +335,7 @@ async def test_websocket_mutations_require_admin(
         [
             {"type": "profile_scheduler/get"},
             {"type": "profile_scheduler/set_enabled", "enabled": True},
-            {"type": "profile_scheduler/set_profile", "profile_id": "home"},
+            {"type": "profile_scheduler/set_profile", "topic_id": "topic", "profile_id": "home"},
             {"type": "profile_scheduler/save", "revision": 0, "document": {}},
         ],
         start=1,
@@ -488,7 +411,9 @@ async def test_stale_callback_queued_during_save_cannot_cancel_new_actions(
         await hass.async_block_till_done(wait_background_tasks=True)
         old_callback, old_due = timers[-1]
         replacement = deepcopy(schedule_document)
-        replacement["profiles"][0]["rows"][0]["blocks"][0]["actions"][0]["data"]["temperature"] = 23
+        replacement["topics"][0]["profiles"][0]["schedules"]["all"][0]["blocks"][0]["actions"][0][
+            "data"
+        ]["temperature"] = 23
         action_calls.clear()
         once_events: list[Event] = []
         hass.bus.async_listen("scheduler_test_once", once_events.append)
@@ -544,7 +469,7 @@ async def test_state_action_rejects_templated_data_key(
     hass: HomeAssistant, schedule_document: dict[str, Any]
 ) -> None:
     """Templated dictionary keys cannot disguise relative, non-repeatable actions."""
-    schedule_document["profiles"][0]["rows"][0]["blocks"][0]["actions"] = [
+    schedule_document["topics"][0]["profiles"][0]["schedules"]["all"][0]["blocks"][0]["actions"] = [
         {
             "action": "light.turn_on",
             "target": {"entity_id": "light.scheduler_test"},
@@ -596,13 +521,11 @@ async def test_native_switch_can_disable_its_own_running_scheduler(
             label="Must not execute",
             actions=[{"event": "scheduler_test_after_disable"}],
         )
-        schedule_document["profiles"][0]["rows"] = [
-            {
-                "id": "control",
-                "name": "Scheduler control",
-                "entity_ids": [switch_id],
-                "blocks": [disable_block, later_block],
-            }
+        schedule_document["topics"][0]["entities"] = [
+            {"id": "control", "name": "Scheduler control", "entity_ids": [switch_id]}
+        ]
+        schedule_document["topics"][0]["profiles"][0]["schedules"]["all"] = [
+            {"id": "control", "blocks": [disable_block, later_block]}
         ]
         scheduler = entry.runtime_data
         later_events: list[Event] = []
@@ -628,3 +551,78 @@ async def test_native_switch_can_disable_its_own_running_scheduler(
             assert later_events == []
         finally:
             await asyncio.wait_for(hass.config_entries.async_unload(entry.entry_id), timeout=5)
+
+
+@pytest.mark.freeze_time("2026-11-16T11:00:00+00:00", real_asyncio=True)
+async def test_sequence_can_change_other_topic_then_disable_scheduler(
+    hass: HomeAssistant,
+    enable_custom_integrations: None,
+    schedule_document: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """A surviving script remains recognizable after another topic changes profile."""
+    entry = MockConfigEntry(domain="profile_scheduler", unique_id="profile_scheduler", data={})
+    entry.add_to_hass(hass)
+    await hass.config.async_update(time_zone="Europe/Prague")
+    with patch(
+        "homeassistant.components.panel_custom.async_register_panel", new_callable=AsyncMock
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        if not hass.is_running:
+            await hass.async_start()
+        await hass.async_block_till_done(wait_background_tasks=True)
+        scheduler = entry.runtime_data
+        first = schedule_document["topics"][0]
+        second = deepcopy(first)
+        second.update(id="second", name="Second", active_profile=None)
+        second["profiles"][0]["schedules"]["all"] = []
+        first["profiles"][0]["schedules"]["all"] = []
+        schedule_document["topics"].append(second)
+        await scheduler.async_save(schedule_document, scheduler.revision)
+        await hass.async_block_till_done(wait_background_tasks=True)
+        registry = er.async_get(hass)
+        select_id = registry.async_get_entity_id(
+            "select", "profile_scheduler", f"{entry.entry_id}_topic_second_profile"
+        )
+        switch_id = registry.async_get_entity_id(
+            "switch", "profile_scheduler", f"{entry.entry_id}_enabled"
+        )
+        assert select_id is not None and switch_id is not None
+        first["entities"] = [{"id": "control", "name": "Control", "entity_ids": []}]
+        first["profiles"][0]["schedules"]["all"] = [
+            {
+                "id": "control",
+                "blocks": [
+                    {
+                        "id": "run",
+                        "start": "13:01",
+                        "end": "13:30",
+                        "mode": "once",
+                        "label": "Control scheduler",
+                        "color": "#ffffff",
+                        "actions": [
+                            {
+                                "action": "select.select_option",
+                                "target": {"entity_id": select_id},
+                                "data": {"option": "Home"},
+                            },
+                            {"action": "switch.turn_off", "target": {"entity_id": switch_id}},
+                        ],
+                    }
+                ],
+            }
+        ]
+        await scheduler.async_save(schedule_document, scheduler.revision)
+        due = datetime(2026, 11, 16, 12, 1, tzinfo=UTC)
+        freezer.move_to(due)
+        async_fire_time_changed(hass, due)
+        try:
+            await asyncio.wait_for(
+                hass.async_block_till_done(wait_background_tasks=True), timeout=3
+            )
+            assert scheduler.document["topics"][1]["active_profile"] == "home"
+            assert scheduler.document["enabled"] is False
+            assert hass.states.get(switch_id).state == "off"
+            assert scheduler._tasks == {}
+        finally:
+            await asyncio.wait_for(hass.config_entries.async_unload(entry.entry_id), timeout=3)

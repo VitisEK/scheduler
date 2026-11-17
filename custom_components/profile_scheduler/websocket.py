@@ -58,7 +58,11 @@ async def websocket_save(
 
 
 @websocket_api.websocket_command(
-    {vol.Required("type"): f"{DOMAIN}/set_profile", vol.Required("profile_id"): vol.Any(str, None)}
+    {
+        vol.Required("type"): f"{DOMAIN}/set_profile",
+        vol.Required("topic_id"): str,
+        vol.Required("profile_id"): vol.Any(str, None),
+    }
 )
 @websocket_api.require_admin
 @websocket_api.async_response
@@ -66,7 +70,9 @@ async def websocket_set_profile(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
 ) -> None:
     runtime = _runtime(hass)
-    await runtime.async_set_profile(msg["profile_id"], Context(user_id=connection.user.id))
+    await runtime.async_set_profile(
+        msg["topic_id"], msg["profile_id"], Context(user_id=connection.user.id)
+    )
     connection.send_result(msg["id"], runtime.snapshot())
 
 
