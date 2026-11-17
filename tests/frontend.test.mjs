@@ -66,7 +66,9 @@ test("topic entities, profiles, native editors and independent activation", asyn
     assert.deepEqual(plain(dialog.querySelector("ha-form").schema[1].selector), { entity: { multiple: true } });
     change(window, dialog.querySelector("ha-form"), { name: "Pracovna", entity_ids: ["climate.office"] });
     await click(window, dialog, "Uložit");
+    await click(window, panel.shadowRoot, "Profily");
     await edit(window, panel, "Přidat profil", { name: "Doma", schedule_mode: "daily" });
+    await click(window, panel.shadowRoot, "Plán");
     await click(window, panel.shadowRoot, "Přidat úsek");
     dialog = panel.shadowRoot.querySelector("ha-dialog");
     const form = dialog.querySelector("ha-form");
@@ -86,6 +88,7 @@ test("topic entities, profiles, native editors and independent activation", asyn
     assert.equal(saved.profiles[0].schedules.all[0].blocks[0].end, "23:00");
     assert.equal(saved.profiles[0].schedules.all[0].blocks[0].actions.length, 2);
     assert.deepEqual(saved.profiles[0].schedules.all[0].blocks[0].actions[0].target, { entity_id: ["climate.office"] });
+    await click(window, panel.shadowRoot, "Profily");
     change(window, panel.shadowRoot.querySelector("ha-form"), { active: saved.profiles[0].id });
     await tick(window);
     assert.deepEqual(calls.find((call) => call.type.endsWith("/set_profile")), { type: "profile_scheduler/set_profile", topic_id: saved.id, profile_id: saved.profiles[0].id });
@@ -114,6 +117,7 @@ test("weekly days and profiles stay isolated; deleting an entity cleans all sche
   const app = await setup({ document });
   const { window, panel } = app;
   try {
+    await click(window, panel.shadowRoot, "Plán");
     assert.match(panel.shadowRoot.querySelector(".block").textContent, /Heat/);
     let day = [...panel.shadowRoot.querySelectorAll("ha-form")].find((form) => form.schema[0].name === "day");
     change(window, day, { day: "1" });
@@ -130,6 +134,7 @@ test("weekly days and profiles stay isolated; deleting an entity cleans all sche
     let profiles = app.read().topics[0].profiles;
     assert.equal(profiles[0].schedules["1"][0].blocks[0].label, "Tuesday");
     assert.equal(profiles[1].schedules.all[0].blocks[0].label, "Heat");
+    await click(window, panel.shadowRoot, "Entity");
     await click(window, panel.shadowRoot, "Upravit řádek");
     dialog = panel.shadowRoot.querySelector("ha-dialog");
     await click(window, dialog, "Smazat");
@@ -193,6 +198,7 @@ test("mode conversion copies selected schedule after confirmation", async () => 
   const document = { enabled: false, topics: [{ id: "t", name: "T", entities: [], active_profile: null, profiles: [{ id: "p", name: "P", schedule_mode: "daily", schedules: { all: [] } }] }] };
   const app = await setup({ document });
   try {
+    await click(app.window, app.panel.shadowRoot, "Profily");
     await edit(app.window, app.panel, "Upravit profil", { name: "P", schedule_mode: "weekly" });
     assert.equal(app.confirmations.length, 1);
     await click(app.window, app.panel.shadowRoot, "Uložit");
@@ -209,6 +215,7 @@ test("renaming and deleting topics and profiles updates only the selected topic"
   const { window, panel } = app;
   try {
     await edit(window, panel, "Upravit téma", { name: "Renamed" });
+    await click(window, panel.shadowRoot, "Profily");
     await edit(window, panel, "Upravit profil", { name: "New", schedule_mode: "daily" });
     await click(window, panel.shadowRoot, "Uložit");
     assert.equal(app.read().topics[0].name, "Renamed");
@@ -233,4 +240,35 @@ test("cold panel explains native editor bootstrap", async () => {
     await click(app.window, app.panel.shadowRoot, "Přidat téma");
     assert.equal(app.panel.shadowRoot.querySelector("ha-dialog"), null);
   } finally { app.panel.remove(); app.dom.window.close(); }
+});
+
+test("topic sections separate editing and preserve unsaved changes and profile selection", async () => {
+  const document = { enabled: false, topics: [{ id: "t", name: "Topení", active_profile: null,
+    entities: [{ id: "e", name: "Obývák", entity_ids: ["climate.office"] }], profiles: [
+      { id: "p1", name: "Doma", schedule_mode: "daily", schedules: { all: [] } },
+      { id: "p2", name: "Pryč", schedule_mode: "daily", schedules: { all: [] } },
+    ] }] };
+  const app = await setup({ document });
+  const { window, panel } = app;
+  const hasButton = (name) => [...panel.shadowRoot.querySelectorAll("ha-button")].some((button) => button.textContent === name);
+  try {
+    assert.equal(hasButton("Přidat řádek"), true);
+    assert.equal(hasButton("Přidat profil"), false);
+    assert.equal(hasButton("Přidat úsek"), false);
+    await edit(window, panel, "Přidat řádek", { name: "Ložnice", entity_ids: ["climate.bedroom"] });
+    await click(window, panel.shadowRoot, "Profily");
+    assert.equal(hasButton("Přidat řádek"), false);
+    assert.equal(hasButton("Přidat profil"), true);
+    await click(window, panel.shadowRoot, "Pryč");
+    await click(window, panel.shadowRoot, "Plán");
+    assert.equal(hasButton("Přidat profil"), false);
+    assert.equal(hasButton("Přidat úsek"), true);
+    assert.equal(panel._selected, "p2");
+    assert.match(panel.shadowRoot.textContent, /Ložnice/);
+    await click(window, panel.shadowRoot, "Entity");
+    assert.match(panel.shadowRoot.textContent, /Neuložené změny/);
+    assert.equal(panel._selected, "p2");
+    await click(window, panel.shadowRoot, "Uložit");
+    assert.equal(app.read().topics[0].entities[1].name, "Ložnice");
+  } finally { panel.remove(); app.dom.window.close(); }
 });

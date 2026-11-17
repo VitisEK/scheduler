@@ -53,15 +53,15 @@ obnovte prohlížeč bez mezipaměti. Chyby načtení integrace hledejte v syst�
 
 ## První plán
 
-1. Vytvořte téma, například **Topení**, a přidejte do něj řádky s entitami.
-2. Vytvořte profil, například **Doma**, a zvolte stejný plán pro každý den nebo
+1. Vytvořte téma, například **Topení**, a v záložce **Entity** přidejte řádky s entitami.
+2. V záložce **Profily** vytvořte profil, například **Doma**, a zvolte stejný plán pro každý den nebo
    samostatné plány podle dne v týdnu. Profily používají řádky daného tématu.
-3. Vyberte den plánu a na ose přidejte úseky s časy, popiskem, barvou a akcemi
+3. V záložce **Plán** vyberte profil a den plánu a na ose přidejte úseky s časy, popiskem, barvou a akcemi
    Home Assistantu. Cílové entity řádku předvyplní první novou akci; v editoru
    akcí lze cíle dále upravit. Při změně entit řádku se přepíší přímé cíle,
    které přesně odpovídají původnímu seznamu entit řádku. Jiné cíle, oblasti
    a vnořené skripty se nepřepisují; zkontrolujte je v editoru akcí.
-4. Uložte plán a vyberte aktivní profil tématu. Každé téma lze ovládat zvlášť
+4. Uložte plán a v záložce **Profily** vyberte aktivní profil tématu. Každé téma lze ovládat zvlášť
    také z automatizace pomocí příslušné entity výběru v HA.
 5. Zapněte plánovač. Při zapnutí se ihned použijí aktuální stavové úseky.
 

@@ -1,7 +1,7 @@
 /* Native HA controls surround the only custom UI: the daily timeline. */
 const TEXT = {
   cs: {
-    topics: "Témata", addTopic: "Přidat téma", editTopic: "Upravit téma", schedule_mode: "Režim plánu", daily: "Každý den", weekly: "Podle dne v týdnu", changeMode: "Změnit režim plánu? Stávající plány budou nahrazeny kopií vybraného dne.", day: "Den plánu", title: "Scheduler", profiles: "Profily", addProfile: "Přidat profil", editProfile: "Upravit profil",
+    sectionEntities: "Entity", sectionProfiles: "Profily", sectionPlan: "Plán", topics: "Témata", addTopic: "Přidat téma", editTopic: "Upravit téma", schedule_mode: "Režim plánu", daily: "Každý den", weekly: "Podle dne v týdnu", changeMode: "Změnit režim plánu? Stávající plány budou nahrazeny kopií vybraného dne.", day: "Den plánu", title: "Scheduler", profiles: "Profily", addProfile: "Přidat profil", editProfile: "Upravit profil",
     addRow: "Přidat řádek", editRow: "Upravit řádek", addBlock: "Přidat úsek", editBlock: "Upravit úsek",
     name: "Název", weekdays: "Dny pro automatický výběr", entities: "Výchozí cílové entity", entity_ids: "Entity",
     start: "Začátek (HH:MM)", end: "Konec (HH:MM nebo 24:00)", label: "Hodnota nebo popisek akce",
@@ -25,7 +25,7 @@ const TEXT = {
     days: ["Pondělí", "Úterý", "Středa", "Čtvrtek", "Pátek", "Sobota", "Neděle"],
   },
   en: {
-    topics: "Topics", addTopic: "Add topic", editTopic: "Edit topic", schedule_mode: "Schedule mode", daily: "Every day", weekly: "By weekday", changeMode: "Change schedule mode? Existing plans will be replaced with a copy of the selected day.", day: "Plan day", title: "Scheduler", profiles: "Profiles", addProfile: "Add profile", editProfile: "Edit profile",
+    sectionEntities: "Entities", sectionProfiles: "Profiles", sectionPlan: "Schedule", topics: "Topics", addTopic: "Add topic", editTopic: "Edit topic", schedule_mode: "Schedule mode", daily: "Every day", weekly: "By weekday", changeMode: "Change schedule mode? Existing plans will be replaced with a copy of the selected day.", day: "Plan day", title: "Scheduler", profiles: "Profiles", addProfile: "Add profile", editProfile: "Edit profile",
     addRow: "Add row", editRow: "Edit row", addBlock: "Add time block", editBlock: "Edit time block",
     name: "Name", weekdays: "Days for automatic selection", entities: "Default target entities", entity_ids: "Entities",
     start: "Start (HH:MM)", end: "End (HH:MM or 24:00)", label: "Value or action label",
@@ -353,7 +353,7 @@ export class ProfileSchedulerPanel extends HTMLElement {
       *{box-sizing:border-box} main{padding:24px;max-width:1600px;margin:auto} h1{font-size:24px} h2{font-size:20px}
       .toolbar,.status,.footer{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.toolbar{margin:16px 0}.status{padding:16px;border-radius:var(--ha-card-border-radius,12px);background:var(--card-background-color)}
       .error{color:var(--error-color);white-space:pre-wrap}.notice{padding:16px;background:var(--card-background-color);border:1px solid var(--divider-color);border-radius:12px}
-      .profiles{display:flex;gap:8px;flex-wrap:wrap}.selected{outline:2px solid var(--primary-color);border-radius:var(--ha-card-border-radius,12px)}
+      .profiles{display:flex;gap:8px;flex-wrap:wrap}.sections{display:flex;gap:8px;overflow-x:auto;padding:8px 4px;white-space:nowrap}.selected{outline:2px solid var(--primary-color);border-radius:var(--ha-card-border-radius,12px)}
       .scroll{overflow-x:auto;padding:4px}.grid{min-width:850px}.row{display:grid;grid-template-columns:200px 1fr;gap:12px;margin-bottom:12px}.row-label{display:flex;flex-direction:column;align-items:flex-start;gap:4px;overflow-wrap:anywhere}
       .track{position:relative;height:64px;background:repeating-linear-gradient(to right,var(--divider-color) 0,var(--divider-color) 1px,transparent 1px,transparent calc(100% / 48));border:1px solid var(--divider-color);border-radius:8px}
       .ticks{display:flex;justify-content:space-between;font-size:12px;color:var(--secondary-text-color)}.ticks span:last-child{transform:translateX(-2px)}
@@ -407,36 +407,50 @@ export class ProfileSchedulerPanel extends HTMLElement {
     topicTabs.append(this._button(this._t("addTopic"), () => this._editor("topic"), true));
     main.append(el("h2", this._t("topics")), topicTabs);
     if (topic) {
+      this._section ??= "entities";
+      const sectionNav = el("nav", undefined, "sections");
+      sectionNav.setAttribute("aria-label", this._t("topics"));
+      for (const [section, label] of [["entities", "sectionEntities"], ["profiles", "sectionProfiles"], ["plan", "sectionPlan"]]) {
+        const button = this._button(this._t(label), () => { this._section = section; this._render(); }, true);
+        button.setAttribute("aria-pressed", String(this._section === section));
+        if (this._section === section) button.className = "selected";
+        sectionNav.append(button);
+      }
+      main.append(sectionNav);
       const topicControls = el("div", undefined, "toolbar");
-      topicControls.append(this._button(this._t("editTopic"), () => this._editor("topic", undefined, undefined, topic), true),
-        this._button(this._t("addRow"), () => this._editor("row"), true));
+      topicControls.append(this._button(this._t("editTopic"), () => this._editor("topic", undefined, undefined, topic), true));
+      if (this._section === "entities") topicControls.append(this._button(this._t("addRow"), () => this._editor("row"), true));
       main.append(topicControls);
-      for (const entity of topic.entities) {
+      if (this._section === "entities") for (const entity of topic.entities) {
         const item = el("div", undefined, "toolbar");
         item.append(el("strong", entity.name), el("small", entity.entity_ids.map((id) => this.hass.states[id]?.attributes.friendly_name || id).join(", ") || this._t("group")),
           this._button(this._t("editRow"), () => this._editor("row", undefined, entity, entity), true));
         main.append(item);
       }
-      if (this._editors) main.append(this._form([{ name: "active", label: this._t("active"), selector: { select: { options: [
+      if (this._section === "profiles" && this._editors) main.append(this._form([{ name: "active", label: this._t("active"), selector: { select: { options: [
         { value: "__none__", label: this._t("noProfile") }, ...topic.profiles.map((item) => ({ value: item.id, label: item.name })),
       ] } } }], { active: topic.active_profile || "__none__" }, (value) => {
         void this._mutate({ type: "profile_scheduler/set_profile", topic_id: topic.id, profile_id: value.active === "__none__" ? null : value.active });
       }));
-      const tabs = el("div", undefined, "profiles");
-      for (const item of topic.profiles) {
-        const tab = this._button(item.name, () => { this._selected = item.id; this._render(); }, true);
-        tab.setAttribute("aria-pressed", String(this._selected === item.id));
-        if (this._selected === item.id) tab.className = "selected";
-        tabs.append(tab);
+      if (this._section !== "entities") {
+        const tabs = el("div", undefined, "profiles");
+        for (const item of topic.profiles) {
+          const tab = this._button(item.name, () => { this._selected = item.id; this._render(); }, true);
+          tab.setAttribute("aria-pressed", String(this._selected === item.id));
+          if (this._selected === item.id) tab.className = "selected";
+          tabs.append(tab);
+        }
+        if (this._section === "profiles") tabs.append(this._button(this._t("addProfile"), () => this._editor("profile"), true));
+        main.append(el("h2", this._t("profiles")), tabs);
       }
-      tabs.append(this._button(this._t("addProfile"), () => this._editor("profile"), true));
-      main.append(el("h2", this._t("profiles")), tabs);
     }
     const profile = topic?.profiles.find((item) => item.id === this._selected);
-    if (profile) {
+    if (profile && this._section === "profiles") {
       const controls = el("div", undefined, "toolbar");
       controls.append(this._button(this._t("editProfile"), () => this._editor("profile", profile, undefined, profile), true));
       main.append(controls);
+    }
+    if (profile && this._section === "plan") {
       if (profile.schedule_mode === "weekly" && this._editors) main.append(this._form([
         { name: "day", label: this._t("day"), selector: { select: { options: this._t("days").map((label, i) => ({ label, value: String(i) })) } } },
       ], { day: this._day }, (value) => { this._day = value.day; this._render(); }));
@@ -492,7 +506,7 @@ export class ProfileSchedulerPanel extends HTMLElement {
         line.append(label, timeline); grid.append(line);
       }
       scroll.append(grid); main.append(scroll);
-    } else main.append(el("p", this._t("empty")));
+    } else if (topic && !profile && this._section === "plan") main.append(el("p", this._t("empty")));
     this.shadowRoot.append(main);
   }
 }
