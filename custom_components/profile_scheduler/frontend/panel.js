@@ -3,7 +3,7 @@ const TEXT = {
   cs: {
     topics: "Témata", addTopic: "Přidat téma", editTopic: "Upravit téma", schedule_mode: "Režim plánu", daily: "Každý den", weekly: "Podle dne v týdnu", changeMode: "Změnit režim plánu? Stávající plány budou nahrazeny kopií vybraného dne.", day: "Den plánu", title: "Scheduler", profiles: "Profily", addProfile: "Přidat profil", editProfile: "Upravit profil",
     addRow: "Přidat řádek", editRow: "Upravit řádek", addBlock: "Přidat úsek", editBlock: "Upravit úsek",
-    name: "Název", weekdays: "Dny pro automatický výběr", entities: "Výchozí cílové entity",
+    name: "Název", weekdays: "Dny pro automatický výběr", entities: "Výchozí cílové entity", entity_ids: "Entity",
     start: "Začátek (HH:MM)", end: "Konec (HH:MM nebo 24:00)", label: "Hodnota nebo popisek akce",
     mode: "Vykonávání", state: "Stav – obnovit také po restartu", once: "Jednorázově – pouze na začátku",
     color: "Barva", actions: "Akce Home Assistant", save: "Uložit", cancel: "Zrušit", remove: "Smazat",
@@ -27,7 +27,7 @@ const TEXT = {
   en: {
     topics: "Topics", addTopic: "Add topic", editTopic: "Edit topic", schedule_mode: "Schedule mode", daily: "Every day", weekly: "By weekday", changeMode: "Change schedule mode? Existing plans will be replaced with a copy of the selected day.", day: "Plan day", title: "Scheduler", profiles: "Profiles", addProfile: "Add profile", editProfile: "Edit profile",
     addRow: "Add row", editRow: "Edit row", addBlock: "Add time block", editBlock: "Edit time block",
-    name: "Name", weekdays: "Days for automatic selection", entities: "Default target entities",
+    name: "Name", weekdays: "Days for automatic selection", entities: "Default target entities", entity_ids: "Entities",
     start: "Start (HH:MM)", end: "End (HH:MM or 24:00)", label: "Value or action label",
     mode: "Execution", state: "State – also restore on restart", once: "One shot – only at the start",
     color: "Color", actions: "Home Assistant actions", save: "Save", cancel: "Cancel", remove: "Delete",
