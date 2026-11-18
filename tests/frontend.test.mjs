@@ -72,13 +72,16 @@ test("topic entities, profiles, native editors and independent activation", asyn
     await click(window, panel.shadowRoot, "Přidat úsek");
     dialog = panel.shadowRoot.querySelector("ha-dialog");
     const form = dialog.querySelector("ha-form");
-    change(window, form, { label: "21 °C", start: "06:00", end: "22:00", mode: "state", color: "#1976d2" });
+    change(window, form, { label: "21 °C", start: "06:00", end: "22:00", mode: "state" });
+    const orange = [...dialog.querySelectorAll(".color-choice")].find((button) => button.textContent === "Oranžová");
+    orange.click();
+    assert.equal(orange.getAttribute("aria-pressed"), "true");
     const actions = dialog.querySelector("ha-selector");
     assert.deepEqual(plain(actions.selector), { action: { optionsInSidebar: false } });
     change(window, actions, [{ action: "climate.set_temperature", target: {}, data: { temperature: 21 } }]);
     assert.equal(actions.value[0].target.entity_id[0], "climate.office");
     change(window, actions, [...actions.value, { action: "climate.turn_on" }]);
-    change(window, form, { ...form.data, label: "21 °C", start: "06:00", end: "23:00", mode: "state", color: "#1976d2", actions: [] });
+    change(window, form, { ...form.data, label: "21 °C", start: "06:00", end: "23:00", mode: "state", actions: [] });
     app.panel.hass = { ...app.panel.hass, states: {} };
     assert.equal(panel.shadowRoot.querySelector("ha-dialog"), dialog);
     await click(window, dialog, "Uložit");
@@ -86,6 +89,9 @@ test("topic entities, profiles, native editors and independent activation", asyn
     const saved = app.read().topics[0];
     assert.equal(saved.profiles[0].schedules.all[0].id, saved.entities[0].id);
     assert.equal(saved.profiles[0].schedules.all[0].blocks[0].end, "23:00");
+    assert.equal(saved.profiles[0].schedules.all[0].blocks[0].color, "#a94f00");
+    assert.equal(panel.shadowRoot.querySelector(".block").style.backgroundColor, "rgb(169, 79, 0)");
+    assert.equal(panel.shadowRoot.querySelector(".block-list .color-swatch").style.backgroundColor, "rgb(169, 79, 0)");
     assert.equal(saved.profiles[0].schedules.all[0].blocks[0].actions.length, 2);
     assert.deepEqual(saved.profiles[0].schedules.all[0].blocks[0].actions[0].target, { entity_id: ["climate.office"] });
     await click(window, panel.shadowRoot, "Profily");
@@ -124,7 +130,7 @@ test("weekly days and profiles stay isolated; deleting an entity cleans all sche
     assert.equal(panel.shadowRoot.querySelector(".block"), null);
     await click(window, panel.shadowRoot, "Přidat úsek");
     let dialog = panel.shadowRoot.querySelector("ha-dialog");
-    change(window, dialog.querySelector("ha-form"), { label: "Tuesday", start: "09:00", end: "10:00", mode: "once", color: "#1976d2" });
+    change(window, dialog.querySelector("ha-form"), { label: "Tuesday", start: "09:00", end: "10:00", mode: "once" });
     change(window, dialog.querySelector("ha-selector"), [{ action: "climate.turn_on" }]);
     await click(window, dialog, "Uložit");
     day = [...panel.shadowRoot.querySelectorAll("ha-form")].find((form) => form.schema[0].name === "day");

@@ -52,6 +52,7 @@ const TEXT = {
   },
 };
 const COLORS = ["#1976d2", "#287d3c", "#a94f00", "#8050ad", "#bc3039", "#007b83"];
+const blockColor = (color) => /^#[0-9a-f]{6}$/i.test(color) ? color.toLowerCase() : COLORS[0];
 const clone = (value) => JSON.parse(JSON.stringify(value));
 // getRandomValues is also available on local HTTP installations of HA, where
 // the secure-context-only randomUUID API may be absent.
@@ -288,15 +289,31 @@ export class ProfileSchedulerPanel extends HTMLElement {
         { name: "start", required: true, selector: { text: {} } },
         { name: "end", required: true, selector: { text: {} } },
         { name: "mode", selector: { select: { options: [{ value: "state", label: this._t("state") }, { value: "once", label: this._t("once") }] } } },
-        { name: "color", selector: { select: { options: COLORS.map((value, i) => ({ value, label: this._t("colors")[i] })) } } },
-      ], Object.fromEntries(["label", "start", "end", "mode", "color"].map((key) => [key, draft[key]])), (value) => {
-        for (const key of ["label", "start", "end", "mode", "color"]) {
+      ], Object.fromEntries(["label", "start", "end", "mode"].map((key) => [key, draft[key]])), (value) => {
+        for (const key of ["label", "start", "end", "mode"]) {
           if (key in value) draft[key] = value[key];
         }
       });
     }
     body.append(form);
     if (kind === "block") {
+      const palette = el("fieldset", undefined, "palette");
+      palette.append(el("legend", this._t("color")));
+      const selectedColor = blockColor(draft.color);
+      const colors = COLORS.includes(selectedColor) ? COLORS : [...COLORS, selectedColor];
+      const choices = colors.map((color, index) => {
+        const choice = el("button", this._t("colors")[index] ?? color, "color-choice");
+        choice.type = "button";
+        choice.prepend(this._colorSwatch(color));
+        choice.setAttribute("aria-pressed", String(color === selectedColor));
+        choice.addEventListener("click", () => {
+          draft.color = color;
+          for (const option of choices) option.setAttribute("aria-pressed", String(option === choice));
+        });
+        return choice;
+      });
+      palette.append(...choices);
+      body.append(palette);
       const actions = el("ha-selector");
       actions.hass = this.hass;
       actions.narrow = !!this._narrow;
@@ -335,7 +352,7 @@ export class ProfileSchedulerPanel extends HTMLElement {
           if (!draft.label.trim()) {
             const display = option?.label ?? [value, control.unit].filter((item) => item != null).join(" ");
             draft.label = display;
-            form.data = { label: draft.label, start: draft.start, end: draft.end, mode: draft.mode, color: draft.color };
+            form.data = { label: draft.label, start: draft.start, end: draft.end, mode: draft.mode };
           }
           sync();
         });
@@ -436,6 +453,13 @@ export class ProfileSchedulerPanel extends HTMLElement {
     this.shadowRoot.append(dialog);
   }
 
+  _colorSwatch(color) {
+    const swatch = el("span", undefined, "color-swatch");
+    swatch.style.backgroundColor = blockColor(color);
+    swatch.setAttribute("aria-hidden", "true");
+    return swatch;
+  }
+
   _render() {
     // Never detach a live native dialog: disconnecting it can reset its editor.
     if (this._dialog) return;
@@ -450,6 +474,11 @@ export class ProfileSchedulerPanel extends HTMLElement {
       .scroll{overflow-x:auto;padding:4px}.grid{min-width:850px}.row{display:grid;grid-template-columns:200px 1fr;gap:12px;margin-bottom:12px}.row-label{display:flex;flex-direction:column;align-items:flex-start;gap:4px;overflow-wrap:anywhere}
       .track{position:relative;height:64px;background:repeating-linear-gradient(to right,var(--divider-color) 0,var(--divider-color) 1px,transparent 1px,transparent calc(100% / 48));border:1px solid var(--divider-color);border-radius:8px}
       .ticks{display:flex;justify-content:space-between;font-size:12px;color:var(--secondary-text-color)}.ticks span:last-child{transform:translateX(-2px)}
+      .palette{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 16px;padding:8px;border:1px solid var(--divider-color);border-radius:8px;min-inline-size:0}
+      .color-choice{display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:6px 10px;border:1px solid var(--divider-color);border-radius:6px;background:var(--card-background-color);color:var(--primary-text-color);font:inherit;cursor:pointer}
+      .color-choice[aria-pressed="true"]{outline:2px solid var(--primary-color);outline-offset:-2px;font-weight:bold}
+      .color-swatch{display:inline-block;vertical-align:middle;width:1em;height:1em;border:1px solid var(--divider-color);border-radius:3px}
+      .block-list .color-swatch{margin-inline-end:6px}
       .block-list{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}.block-list ha-button{font-size:12px}
       .block{position:absolute;top:4px;bottom:4px;min-width:8px;border:1px solid #fff;border-radius:6px;color:#fff;font:inherit;font-size:12px;overflow:hidden;text-align:start;padding:3px 5px;cursor:pointer;text-shadow:0 1px 2px #000}
       .block:focus-visible{outline:3px solid var(--primary-text-color);z-index:2}.block span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -581,7 +610,7 @@ export class ProfileSchedulerPanel extends HTMLElement {
             if (right <= left) continue;
             const button = el("button", undefined, "block");
             button.style.left = `${left / 14.4}%`; button.style.width = `${(right - left) / 14.4}%`;
-            button.style.backgroundColor = COLORS.includes(block.color) ? block.color : COLORS[0];
+            button.style.backgroundColor = blockColor(block.color);
             button.title = `${block.label}: ${block.start}–${block.end} · ${this._t(block.mode)}`;
             button.setAttribute("aria-label", button.title);
             button.append(el("span", block.label), el("span", `${block.start}–${block.end} ${block.mode === "once" ? "▶" : "↻"}`));
@@ -592,8 +621,10 @@ export class ProfileSchedulerPanel extends HTMLElement {
         const timeline = el("div");
         const blockList = el("div", undefined, "block-list");
         for (const block of [...row.blocks].sort((a, b) => minutes(a.start) - minutes(b.start))) {
-          blockList.append(this._button(`${block.start}–${block.end} · ${block.label} · ${this._t(block.mode)}`,
-            () => editBlock(block), true));
+          const button = this._button(`${block.start}–${block.end} · ${block.label} · ${this._t(block.mode)}`,
+            () => editBlock(block), true);
+          button.prepend(this._colorSwatch(block.color));
+          blockList.append(button);
         }
         timeline.append(track, blockList);
         line.append(label, timeline); grid.append(line);
