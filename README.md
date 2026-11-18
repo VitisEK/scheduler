@@ -56,8 +56,11 @@ obnovte prohlížeč bez mezipaměti. Chyby načtení integrace hledejte v syst�
 1. Vytvořte téma, například **Topení**, a v záložce **Entity** přidejte řádky s entitami.
 2. V záložce **Profily** vytvořte profil, například **Doma**, a zvolte stejný plán pro každý den nebo
    samostatné plány podle dne v týdnu. Profily používají řádky daného tématu.
-3. V záložce **Plán** vyberte profil a den plánu a na ose přidejte úseky s časy, popiskem, barvou a akcemi
-   Home Assistantu. Cílové entity řádku předvyplní první novou akci; v editoru
+3. V záložce **Plán** vyberte profil a den plánu a přidejte časový úsek.
+   V části **Hodnoty entit** můžete nastavit cílovou teplotu, zapnutí či vypnutí,
+   hodnotu z nabídky nebo číslo podle toho, co entita podporuje. Nastavení vytvoří
+   odpovídající akci Home Assistantu. Další akce můžete přidat v nativním editoru.
+   Cílové entity řádku předvyplní první ručně přidanou akci; v editoru
    akcí lze cíle dále upravit. Při změně entit řádku se přepíší přímé cíle,
    které přesně odpovídají původnímu seznamu entit řádku. Jiné cíle, oblasti
    a vnořené skripty se nepřepisují; zkontrolujte je v editoru akcí.

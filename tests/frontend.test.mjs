@@ -272,3 +272,55 @@ test("topic sections separate editing and preserve unsaved changes and profile s
     assert.equal(app.read().topics[0].entities[1].name, "Ložnice");
   } finally { panel.remove(); app.dom.window.close(); }
 });
+
+test("block editor offers entity-specific values and saves ordinary HA actions", async () => {
+  const entity_ids = ["climate.office", "switch.pump", "input_select.speed", "number.limit", "binary_sensor.door"];
+  const document = { enabled: false, topics: [{ id: "t", name: "T", active_profile: null,
+    entities: [{ id: "e", name: "Mixed", entity_ids }],
+    profiles: [{ id: "p", name: "P", schedule_mode: "daily", schedules: { all: [] } }],
+  }] };
+  const app = await setup({ document });
+  const { window, panel } = app;
+  try {
+    panel.hass = { ...panel.hass, config: { ...panel.hass.config, unit_system: { temperature: "°C" } }, states: {
+      "climate.office": { attributes: { supported_features: 1, min_temp: 7, max_temp: 30, target_temp_step: 0.5 } },
+      "switch.pump": { attributes: {} },
+      "input_select.speed": { attributes: { options: ["Low", "High"] } },
+      "number.limit": { attributes: { min: 6, max: 32, step: 1, unit_of_measurement: "A" } },
+      "binary_sensor.door": { attributes: {} },
+    } };
+    await click(window, panel.shadowRoot, "Plán");
+    await click(window, panel.shadowRoot, "Přidat úsek");
+    let dialog = panel.shadowRoot.querySelector("ha-dialog");
+    const controls = () => [...dialog.querySelectorAll("ha-form")].filter((form) => form.schema[0].name === "value");
+    const [temperature, power, options, limit] = controls();
+    assert.equal(controls().length, 4);
+    assert.deepEqual(plain(temperature.schema[0].selector.number), { min: 7, max: 30, step: 0.5, mode: "box", unit_of_measurement: "°C" });
+    assert.deepEqual(plain(power.schema[0].selector.select.options.map((item) => item.value)), ["on", "off"]);
+    assert.deepEqual(plain(options.schema[0].selector.select.options.map((item) => item.value)), ["Low", "High"]);
+    change(window, temperature, { value: 90 });
+    assert.equal(dialog.querySelector("ha-selector").value.length, 0);
+    change(window, temperature, { value: 21.5 });
+    change(window, power, { value: "off" });
+    change(window, options, { value: "High" });
+    change(window, limit, { value: 16 });
+    await click(window, dialog, "Uložit");
+    await click(window, panel.shadowRoot, "Uložit");
+    const saved = () => app.read().topics[0].profiles[0].schedules.all[0].blocks[0];
+    assert.deepEqual(saved().actions, [
+      { action: "climate.set_temperature", target: { entity_id: ["climate.office"] }, data: { temperature: 21.5 } },
+      { action: "switch.turn_off", target: { entity_id: ["switch.pump"] } },
+      { action: "input_select.select_option", target: { entity_id: ["input_select.speed"] }, data: { option: "High" } },
+      { action: "number.set_value", target: { entity_id: ["number.limit"] }, data: { value: 16 } },
+    ]);
+    panel.shadowRoot.querySelector(".block").click();
+    await tick(window);
+    dialog = panel.shadowRoot.querySelector("ha-dialog");
+    assert.equal(controls()[0].data.value, 21.5);
+    change(window, controls()[0], { value: 19 });
+    await click(window, dialog, "Uložit");
+    await click(window, panel.shadowRoot, "Uložit");
+    assert.equal(saved().actions.length, 4);
+    assert.equal(saved().actions[0].data.temperature, 19);
+  } finally { panel.remove(); app.dom.window.close(); }
+});

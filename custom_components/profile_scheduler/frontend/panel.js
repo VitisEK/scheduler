@@ -4,7 +4,7 @@ const TEXT = {
     sectionEntities: "Entity", sectionProfiles: "Profily", sectionPlan: "Plán", topics: "Témata", addTopic: "Přidat téma", editTopic: "Upravit téma", schedule_mode: "Režim plánu", daily: "Každý den", weekly: "Podle dne v týdnu", changeMode: "Změnit režim plánu? Stávající plány budou nahrazeny kopií vybraného dne.", day: "Den plánu", title: "Scheduler", profiles: "Profily", addProfile: "Přidat profil", editProfile: "Upravit profil",
     addRow: "Přidat řádek", editRow: "Upravit řádek", addBlock: "Přidat úsek", editBlock: "Upravit úsek",
     name: "Název", weekdays: "Dny pro automatický výběr", entities: "Výchozí cílové entity", entity_ids: "Entity",
-    start: "Začátek (HH:MM)", end: "Konec (HH:MM nebo 24:00)", label: "Hodnota nebo popisek akce",
+    start: "Začátek (HH:MM)", end: "Konec (HH:MM nebo 24:00)", label: "Popisek úseku",
     mode: "Vykonávání", state: "Stav – obnovit také po restartu", once: "Jednorázově – pouze na začátku",
     color: "Barva", actions: "Akce Home Assistant", save: "Uložit", cancel: "Zrušit", remove: "Smazat",
     confirm: "Opravdu smazat?", enabled: "Plán je zapnutý", disabled: "Plán je vypnutý", enable: "Zapnout", disable: "Vypnout",
@@ -15,6 +15,7 @@ const TEXT = {
     bootstrap: "Pro načtení standardních editorů otevřete přehled Home Assistantu a potom se vraťte do Scheduleru. Poté stiskněte Znovu načíst editory.",
     dashboard: "Otevřít přehled", retry: "Znovu načíst editory", unavailable: "Standardní editory HA nejsou dostupné. Zkontrolujte podporovanou verzi HA.",
     stateHelp: "Stavové úseky obnovují teplotu a jiné nastavené hodnoty. Scény, skripty a složité sekvence používejte jednorázově. Za koncem úseku zůstane poslední stav; pro vypnutí přidejte další úsek.",
+    entityValues: "Hodnoty entit", temperature: "Teplota", on: "Zapnuto", off: "Vypnuto", value: "Hodnota",
     actionHelp: "Cíle a parametry upravte přímo v nativním editoru akcí. Cíle řádku se předvyplní pouze do první nově vytvořené akce.",
     overlap: "Časy musí mít formát HH:MM a úseky jednoho řádku se nesmějí překrývat.",
     chooseAction: "Přidejte alespoň jednu akci v editoru Home Assistantu.", conflict: "Plán se mezitím změnil. Neuložený návrh zůstal zde; zkopírujte jej nebo znovu načtěte aktuální plán.",
@@ -28,7 +29,7 @@ const TEXT = {
     sectionEntities: "Entities", sectionProfiles: "Profiles", sectionPlan: "Schedule", topics: "Topics", addTopic: "Add topic", editTopic: "Edit topic", schedule_mode: "Schedule mode", daily: "Every day", weekly: "By weekday", changeMode: "Change schedule mode? Existing plans will be replaced with a copy of the selected day.", day: "Plan day", title: "Scheduler", profiles: "Profiles", addProfile: "Add profile", editProfile: "Edit profile",
     addRow: "Add row", editRow: "Edit row", addBlock: "Add time block", editBlock: "Edit time block",
     name: "Name", weekdays: "Days for automatic selection", entities: "Default target entities", entity_ids: "Entities",
-    start: "Start (HH:MM)", end: "End (HH:MM or 24:00)", label: "Value or action label",
+    start: "Start (HH:MM)", end: "End (HH:MM or 24:00)", label: "Block label",
     mode: "Execution", state: "State – also restore on restart", once: "One shot – only at the start",
     color: "Color", actions: "Home Assistant actions", save: "Save", cancel: "Cancel", remove: "Delete",
     confirm: "Delete this item?", enabled: "Schedule is enabled", disabled: "Schedule is disabled", enable: "Enable", disable: "Disable",
@@ -39,6 +40,7 @@ const TEXT = {
     bootstrap: "To load the standard editors, open the Home Assistant dashboard, return to Scheduler, then press Reload editors.",
     dashboard: "Open dashboard", retry: "Reload editors", unavailable: "Standard HA editors are unavailable. Check the supported HA version.",
     stateHelp: "State blocks restore temperature and other set values. Use one-shot mode for scenes, scripts and complex sequences. The last state remains after a block ends; add another block to turn a device off.",
+    entityValues: "Entity values", temperature: "Temperature", on: "On", off: "Off", value: "Value",
     actionHelp: "Edit targets and parameters in the native action editor. Row targets prefill only the first newly created action.",
     overlap: "Use HH:MM times; blocks in the same row must not overlap.",
     chooseAction: "Add at least one action in the Home Assistant editor.", conflict: "The schedule changed elsewhere. Your draft is still here; copy it or reload the current schedule.",
@@ -62,6 +64,56 @@ const el = (tag, text, className) => {
   if (className) node.className = className;
   return node;
 };
+
+// Use the entity metadata supplied by HA, and generate ordinary HA actions so
+// saved plans can still be edited in the native action editor.
+const POWER_DOMAINS = new Set(["switch", "input_boolean", "light", "fan"]);
+
+function valueControl(entityId, hass, translate) {
+  const domain = entityId.split(".")[0];
+  const attributes = hass.states[entityId]?.attributes;
+  if (!attributes) return undefined;
+  if (POWER_DOMAINS.has(domain)) {
+    const options = ["on", "off"].map((value) => ({ value, label: translate(value) }));
+    return { label: translate("value"), selector: { select: { options } }, options, domain };
+  }
+  if (["select", "input_select"].includes(domain)) {
+    if (!Array.isArray(attributes.options) || !attributes.options.length) return undefined;
+    const options = attributes.options.map((value) => ({ value, label: value }));
+    return { label: translate("value"), selector: { select: { options } },
+      options, service: domain + ".select_option", field: "option" };
+  }
+
+  const climate = domain === "climate";
+  // ClimateEntityFeature.TARGET_TEMPERATURE in HA.
+  if (climate && !(attributes.supported_features & 1)) return undefined;
+  if (!climate && !["number", "input_number"].includes(domain)) return undefined;
+  const { min, max, step, unit_of_measurement: unit } = climate
+    ? { min: attributes.min_temp, max: attributes.max_temp, step: attributes.target_temp_step, unit_of_measurement: hass.config.unit_system?.temperature }
+    : attributes;
+  if (!Number.isFinite(min) || !Number.isFinite(max) || max < min) return undefined;
+  const number = { min, max, step: step > 0 ? step : "any", mode: "box" };
+  if (unit) number.unit_of_measurement = unit;
+  return { label: translate(climate ? "temperature" : "value"), selector: { number },
+    service: climate ? "climate.set_temperature" : domain + ".set_value",
+    field: climate ? "temperature" : "value", unit };
+}
+
+function readSimpleValue(action, entityId, control) {
+  if (Object.keys(action).some((key) => !["action", "service", "target", "data"].includes(key))) return undefined;
+  const target = action.target;
+  if (!target || Object.keys(target).length !== 1) return undefined;
+  const ids = Array.isArray(target.entity_id) ? target.entity_id : [target.entity_id];
+  if (ids.length !== 1 || ids[0] !== entityId) return undefined;
+  const service = action.action || action.service;
+  const data = action.data || {};
+  if (control.field) {
+    if (service === control.service && Object.keys(data).length === 1) return data[control.field];
+  } else if (!Object.keys(data).length) {
+    return ["on", "off"].find((value) => service === control.domain + ".turn_" + value);
+  }
+  return undefined;
+}
 
 export class ProfileSchedulerPanel extends HTMLElement {
   constructor() {
@@ -245,13 +297,53 @@ export class ProfileSchedulerPanel extends HTMLElement {
     }
     body.append(form);
     if (kind === "block") {
-      body.append(el("p", this._t("stateHelp")), el("p", this._t("actionHelp")));
       const actions = el("ha-selector");
       actions.hass = this.hass;
       actions.narrow = !!this._narrow;
       actions.selector = { action: { optionsInSidebar: false } };
       actions.label = this._t("actions");
       actions.value = draft.actions;
+      const valueForms = [];
+      const values = el("div");
+      for (const entityId of new Set(row.entity_ids)) {
+        const control = valueControl(entityId, this.hass, (key) => this._t(key));
+        if (!control) continue;
+        const current = (action) => readSimpleValue(action, entityId, control);
+        const sync = () => {
+          const value = draft.actions.map(current).findLast((item) => item !== undefined);
+          valueForm.data = { value };
+        };
+        const name = this.hass.states[entityId].attributes.friendly_name || entityId;
+        const valueForm = this._form([{ name: "value", label: name + " · " + control.label, selector: control.selector }], {}, ({ value }) => {
+          const option = control.options?.find((item) => item.value === value);
+          const limits = control.selector.number;
+          const validNumber = limits && Number.isFinite(value) && value >= limits.min && value <= limits.max;
+          if (!option && !validNumber) {
+            sync();
+            return;
+          }
+          const action = {
+            action: control.service || control.domain + ".turn_" + value,
+            target: { entity_id: [entityId] },
+          };
+          if (control.field) action.data = { [control.field]: value };
+          const prior = draft.actions.findLastIndex((item) => current(item) !== undefined);
+          if (prior < 0) draft.actions.push(action);
+          else draft.actions[prior] = action;
+          targetsInitialized = true;
+          actions.value = clone(draft.actions);
+          if (!draft.label.trim()) {
+            const display = option?.label ?? [value, control.unit].filter((item) => item != null).join(" ");
+            draft.label = display;
+            form.data = { label: draft.label, start: draft.start, end: draft.end, mode: draft.mode, color: draft.color };
+          }
+          sync();
+        });
+        sync();
+        valueForms.push(sync);
+        values.append(valueForm);
+      }
+      if (valueForms.length) body.append(el("h3", this._t("entityValues")), values);
       let targetsInitialized = !!existing || draft.actions.length > 0;
       actions.addEventListener("value-changed", (event) => {
         event.stopPropagation();
@@ -267,8 +359,9 @@ export class ProfileSchedulerPanel extends HTMLElement {
         // HA action selectors are controlled elements: feed every edit back,
         // including edits to existing sequences and rows without default targets.
         actions.value = clone(draft.actions);
+        for (const sync of valueForms) sync();
       });
-      body.append(actions);
+      body.append(el("p", this._t("stateHelp")), el("p", this._t("actionHelp")), actions);
     }
     body.append(dialogError);
     const footer = el("div", undefined, "footer");
